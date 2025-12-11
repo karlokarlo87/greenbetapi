@@ -1,0 +1,80 @@
+{
+  "football": {
+    "sport": "Football",
+    "lastUpdated": "2025-12-11T07:00:00.000Z",
+    "leagues": [
+      {
+        "name": "Premier League",
+        "country": "England",
+        "url": "https://www.oddsportal.com/football/england/premier-league/"
+      },
+      {
+        "name": "La Liga",
+        "country": "Spain",
+        "url": "https://www.oddsportal.com/football/spain/laliga/"
+      },
+      {
+        "name": "Serie A",
+        "country": "Italy",
+        "url": "https://www.oddsportal.com/football/italy/serie-a/"
+      },
+      {
+        "name": "Bundesliga",
+        "country": "Germany",
+        "url": "https://www.oddsportal.com/football/germany/bundesliga/"
+      },
+      {
+        "name": "Ligue 1",
+        "country": "France",
+        "url": "https://www.oddsportal.com/football/france/ligue-1/"
+      },
+      {
+        "name": "Champions League",
+        "country": "Europe",
+        "url": "https://www.oddsportal.com/football/europe/champions-league/"
+      }
+    ]
+  },
+  "basketball": {
+    "sport": "Basketball",
+    "lastUpdated": "2025-12-11T07:00:00.000Z",
+    "leagues": [
+      {
+        "name": "NBA",
+        "country": "USA",
+        "url": "https://www.oddsportal.com/basketball/usa/nba/"
+      },
+      {
+        "name": "EuroLeague",
+        "country": "Europe",
+        "url": "https://www.oddsportal.com/basketball/europe/euroleague/"
+      },
+      {
+        "name": "EuroCup",
+        "country": "Europe",
+        "url": "https://www.oddsportal.com/basketball/europe/eurocup/"
+      }
+    ]
+  },
+  "tennis": {
+    "sport": "Tennis",
+    "lastUpdated": "2025-12-11T07:00:00.000Z",
+    "leagues": [
+      {
+        "name": "ATP",
+        "country": "International",
+        "url": "https://www.oddsportal.com/tennis/atp-singles/"
+      },
+      {
+        "name": "WTA",
+        "country": "International",
+        "url": "https://www.oddsportal.com/tennis/wta-singles/"
+      },
+      {
+        "name": "Grand Slam",
+        "country": "International",
+        "url": "https://www.oddsportal.com/tennis/"
+      }
+    ]
+  }
+}
