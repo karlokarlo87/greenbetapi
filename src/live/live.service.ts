@@ -67,7 +67,26 @@ async function parseInPlaySports() {
       waitUntil: 'networkidle0',
       timeout: 60000 
     });
-    
+       async function autoScroll(page) {
+  await page.evaluate(async () => {
+    await new Promise(resolve => {
+      let totalHeight = 0;
+      const distance = 800;
+
+      const timer = setInterval(() => {
+        const scrollHeight = document.body.scrollHeight;
+        window.scrollBy(0, distance);
+        totalHeight += distance;
+
+        if (totalHeight >= scrollHeight) {
+          clearInterval(timer);
+          resolve(null);
+        }
+      }, 300);
+    });
+  });
+}
+    await autoScroll(page);
     console.log('Page loaded, waiting for content...');
     await page.waitForSelector('.eventRow', { timeout: 10000 }).catch(() => {
         console.log('No matches found for this sport');
