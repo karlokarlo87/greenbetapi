@@ -1,7 +1,6 @@
-import { Injectable, Logger, BadRequestException, Inject } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cron } from '@nestjs/schedule';
-import type { Cache } from 'cache-manager';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 import { SportsService } from '../sports/sports.service';
 const puppeteer = require('puppeteer');
 export interface League {
@@ -16,97 +15,38 @@ export interface LeaguesBySport {
   lastUpdated: string;
 }
 
-export interface LeaguesData {
-  [sport: string]: LeaguesBySport;
-}
-
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 @Injectable()
 export class LeaguesService {
   private readonly logger = new Logger(LeaguesService.name);
-  private allLeaguesData: LeaguesData = {};
+  private leaguesCache: Map<string, LeaguesBySport> = new Map();
 
-  constructor(
-    @Inject(CACHE_MANAGER) private cacheManager: Cache,
-    private readonly sportsService: SportsService,
-  ) {
-    this.initializeWithSampleData();
+  constructor(private readonly sportsService: SportsService) {
+    this.loadLeaguesData();
   }
 
-  private async initializeWithSampleData() {
-    // Initialize with sample data
-    const sampleData: LeaguesData = {
-      football: {
-        sport: 'Football',
-        lastUpdated: new Date().toISOString(),
-        leagues: [
-          { name: 'Premier League', country: 'England', url: 'https://www.oddsportal.com/football/england/premier-league/' },
-          { name: 'La Liga', country: 'Spain', url: 'https://www.oddsportal.com/football/spain/laliga/' },
-          { name: 'Serie A', country: 'Italy', url: 'https://www.oddsportal.com/football/italy/serie-a/' },
-        ],
-      },
-      basketball: {
-        sport: 'Basketball',
-        lastUpdated: new Date().toISOString(),
-        leagues: [
-          { name: 'NBA', country: 'USA', url: 'https://www.oddsportal.com/basketball/usa/nba/' },
-          { name: 'EuroLeague', country: 'Europe', url: 'https://www.oddsportal.com/basketball/europe/euroleague/' },
-        ],
-      },
-    };
-
-    this.allLeaguesData = sampleData;
-
-    // Load into cache
-    const cachePromises = Object.keys(sampleData).map((sport) =>
-      this.cacheManager.set(`leagues:${sport.toLowerCase()}`, sampleData[sport])
-    );
-    await Promise.all(cachePromises);
-
-    this.logger.log('Leagues service initialized with sample data');
+  private loadLeaguesData() {
+    try {
+     
+    } catch (error) {
+      this.logger.error('Error loading leagues data:', error);
+    }
   }
 
-  async getLeaguesBySport(sportName: string) {
-    if (!sportName) {
-      throw new BadRequestException('Sport name is required');
-    }
+ async  getLeaguesBySport(sportName: string) {
 
-    const normalizedSport = sportName.toLowerCase();
-    const leaguesData = await this.cacheManager.get<LeaguesBySport>(
-      `leagues:${normalizedSport}`
-    );
-
-    if (!leaguesData) {
-      return {
-        message: `No leagues found for sport: ${sportName}`,
-        sport: sportName,
-        count: 0,
-        data: [],
-      };
-    }
-
-    return {
-      message: `Leagues for ${sportName} (cached)`,
-      sport: leaguesData.sport,
-      count: leaguesData.leagues.length,
-      lastUpdated: leaguesData.lastUpdated,
-      data: leaguesData.leagues,
-    };
+    const sportsData = this.sportsService.getCachedSportsData();
+    const leaguesData = await parseLeaguesFromSports(sportsData);
+    return leaguesData;
+ 
   }
 
   async getAllLeagues() {
-    return {
-      message: 'All leagues data (from memory)',
-      sports: Object.keys(this.allLeaguesData).length,
-      data: this.allLeaguesData,
-    };
-  }
-
-  @Cron('*/10 * * * *') // Run every 10 minutes
-  async handleCacheRefresh() {
-    this.logger.log('Running 10-minute leagues cache refresh...');
-    await this.refreshLeaguesFromWeb();
+     const sportsData = this.sportsService.getCachedSportsData();
+    const leaguesData = await parseLeaguesFromSports(sportsData);
+    return leaguesData;
+  
   }
 
   async refreshLeaguesFromWeb() {
@@ -123,7 +63,7 @@ export class LeaguesService {
       if (leaguesData && leaguesData.length > 0) {
         // Process and cache the leagues data
         // Group by sport
-        const groupedBySport: LeaguesData = {};
+        const groupedBySport: any = {};
 
         leaguesData.forEach(entry => {
           if (!groupedBySport[entry.sport]) {
@@ -143,16 +83,15 @@ export class LeaguesService {
           });
         });
 
-        // Store in memory
-        this.allLeaguesData = groupedBySport;
+        // Update cache
+        Object.keys(groupedBySport).forEach(sport => {
+          this.leaguesCache.set(sport.toLowerCase(), groupedBySport[sport]);
+        });
 
-        // Update NestJS cache
-        const cachePromises = Object.keys(groupedBySport).map((sport) =>
-          this.cacheManager.set(`leagues:${sport.toLowerCase()}`, groupedBySport[sport])
-        );
-        await Promise.all(cachePromises);
+        // Save to JSON file
+  
 
-        this.logger.log(`Leagues cache refreshed. Total sports: ${Object.keys(groupedBySport).length}`);
+        this.logger.log(`Leagues data refreshed. Total sports: ${Object.keys(groupedBySport).length}`);
       }
     } catch (error) {
       this.logger.error('Error refreshing leagues from web:', error);
@@ -161,12 +100,13 @@ export class LeaguesService {
 }
 
 async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: string; url: string }>) {
+ 
     if (!sportsData || sportsData.length === 0) {
         console.error('Error: No sports data provided');
         return;
     }
 
-    console.log(`Found ${sportsData.length} sports\n`);
+    //console.log(`Found ${sportsData.length} sports\n`);
 
     const browser = await puppeteer.launch({
         headless: 'new',
@@ -200,18 +140,18 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
         // ---------------------------
         for (const sport of sportsData) {
 
-            console.log(`\nParsing: ${sport.name}`);
-            console.log(`URL: ${sport.url}`);
+          //  console.log(`\nParsing: ${sport.name}`);
+           // console.log(`URL: ${sport.url}`);
 
             await page.goto(sport.url, {
                 waitUntil: 'networkidle0',
-                timeout: 90000
+                timeout: 3000
             });
 
-            await page.waitForSelector("main", { timeout: 30000 });
-            await delay(3000);
+            await page.waitForSelector("main", { timeout: 3000 });
+            await delay(1000);
 
-            console.log("Page loaded. Extracting...");
+          //  console.log("Page loaded. Extracting...");
 
             // ---------------------------
             //  EXTRACT COUNTRIES & LEAGUES
@@ -313,7 +253,7 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
 
             const cleaned = Array.from(unique.values());
 
-            console.log(`→ ${cleaned.length} countries with leagues extracted`);
+           // console.log(`→ ${cleaned.length} countries with leagues extracted`);
 
             finalOutput.push(...cleaned);
         }
