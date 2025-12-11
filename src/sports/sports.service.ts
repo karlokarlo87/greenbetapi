@@ -64,48 +64,12 @@ export class SportsService {
     }
   }
 
-  getAllSports() {
-    return {
-      message: 'List of all sports (cached)',
-      count: this.sportsData.length,
-      lastUpdated: this.lastUpdated?.toISOString(),
-      data: this.sportsData,
-    };
+  async getAllSports() {
+      const scrapedSports = await parseSportsMenu();
+    return scrapedSports
   }
-
-  getSportById(id: string) {
-    const sport = this.sportsData.find((s) => s.alt === id);
-
-    if (!sport) {
-      return {
-        message: `Sport not found with ID: ${id}`,
-        data: null,
-      };
-    }
-
-    return {
-      message: `Sport details for: ${sport.name}`,
-      data: sport,
-    };
-  }
-
-  getSportByName(name: string) {
-    const sport = this.sportsData.find(
-      (s) => s.name.toLowerCase() === name.toLowerCase()
-    );
-
-    if (!sport) {
-      return {
-        message: `Sport not found with name: ${name}`,
-        data: null,
-      };
-    }
-
-    return {
-      message: `Sport details for: ${sport.name}`,
-      data: sport,
-    };
-  }
+ 
+ 
   
 }
 
@@ -146,17 +110,17 @@ async function parseSportsMenu() {
             const firstPageUrl = `https://www.oddsportal.com/`;
           
             
-            await page.goto(firstPageUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await page.goto(firstPageUrl, { waitUntil: 'domcontentloaded', timeout: 1000 });
 
             console.log('Page loaded, waiting for sports menu...');
     
     // Wait for sports menu
     await page.waitForSelector('nav[aria-label="Sports Menu"]', { 
-      timeout: 60000 
+      timeout: 1000 
     });
     
     // Give extra time for content to render
-    await delay(6000);
+    await delay(1000);
     
     // Parse all sports from ul > li
     const sports = await page.evaluate(() => {

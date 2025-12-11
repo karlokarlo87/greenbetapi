@@ -6,15 +6,10 @@ export class SportsController {
   constructor(private readonly sportsService: SportsService) {}
 
   @Get()
-  getAllSports(@Query('name') name?: string) {
-    if (name) {
-      return this.sportsService.getSportByName(name);
-    }
+  getAllSports() {
+     
     return this.sportsService.getAllSports();
   }
 
-  @Get(':id')
-  getSportById(@Param('id') id: string) {
-    return this.sportsService.getSportById(id);
-  }
+   
 }
