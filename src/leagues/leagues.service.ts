@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { SportsService } from '../sports/sports.service';
 const puppeteer = require('puppeteer');
 export interface League {
   name: string;
@@ -21,7 +22,7 @@ export class LeaguesService {
   private readonly logger = new Logger(LeaguesService.name);
   private leaguesCache: Map<string, LeaguesBySport> = new Map();
 
-  constructor() {
+  constructor(private readonly sportsService: SportsService) {
     this.loadLeaguesData();
   }
 
@@ -71,16 +72,64 @@ export class LeaguesService {
       data: allLeagues,
     };
   }
+
+  async refreshLeaguesFromWeb() {
+    try {
+      const sportsData = this.sportsService.getCachedSportsData();
+      if (!sportsData || sportsData.length === 0) {
+        this.logger.warn('No sports data available to fetch leagues');
+        return;
+      }
+
+      this.logger.log('Starting leagues data refresh from web...');
+      const leaguesData = await parseLeaguesFromSports(sportsData);
+
+      if (leaguesData && leaguesData.length > 0) {
+        // Process and cache the leagues data
+        // Group by sport
+        const groupedBySport: any = {};
+
+        leaguesData.forEach(entry => {
+          if (!groupedBySport[entry.sport]) {
+            groupedBySport[entry.sport] = {
+              sport: entry.sport,
+              leagues: [],
+              lastUpdated: new Date().toISOString(),
+            };
+          }
+
+          entry.leagues.forEach(league => {
+            groupedBySport[entry.sport].leagues.push({
+              name: league.name,
+              country: entry.country,
+              url: league.url,
+            });
+          });
+        });
+
+        // Update cache
+        Object.keys(groupedBySport).forEach(sport => {
+          this.leaguesCache.set(sport.toLowerCase(), groupedBySport[sport]);
+        });
+
+        // Save to JSON file
+        const dataPath = path.join(__dirname, 'data', 'leagues.json');
+        fs.writeFileSync(dataPath, JSON.stringify(groupedBySport, null, 2));
+
+        this.logger.log(`Leagues data refreshed. Total sports: ${Object.keys(groupedBySport).length}`);
+      }
+    } catch (error) {
+      this.logger.error('Error refreshing leagues from web:', error);
+    }
+  }
 }
 
-async function parseLeaguesFromSports() {
-    const sportsJsonPath = path.join(__dirname, '../sports/data', 'sports.json');
-    if (!fs.existsSync(sportsJsonPath)) {
-        console.error('Error: sports.json not found at', sportsJsonPath);
+async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: string; url: string }>) {
+    if (!sportsData || sportsData.length === 0) {
+        console.error('Error: No sports data provided');
         return;
     }
 
-    const sportsData = JSON.parse(fs.readFileSync(sportsJsonPath, 'utf-8'));
     console.log(`Found ${sportsData.length} sports\n`);
 
     const browser = await puppeteer.launch({

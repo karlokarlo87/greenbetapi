@@ -5,5 +5,6 @@ import { SportsService } from './sports.service';
 @Module({
   controllers: [SportsController],
   providers: [SportsService],
+  exports: [SportsService],
 })
 export class SportsModule {}

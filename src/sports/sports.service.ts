@@ -68,9 +68,11 @@ export class SportsService {
       const scrapedSports = await parseSportsMenu();
     return scrapedSports
   }
- 
- 
-  
+
+  getCachedSportsData(): Sport[] {
+    return this.sportsData;
+  }
+
 }
 
 async function parseSportsMenu() {
