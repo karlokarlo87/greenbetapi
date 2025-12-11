@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Football",
+    "icon": null,
+    "alt": "football",
+    "url": "https://www.oddsportal.com/football/"
+  },
+  {
+    "name": "Basketball",
+    "icon": null,
+    "alt": "basketball",
+    "url": "https://www.oddsportal.com/basketball/"
+  },
+  {
+    "name": "Tennis",
+    "icon": null,
+    "alt": "tennis",
+    "url": "https://www.oddsportal.com/tennis/"
+  },
+  {
+    "name": "Ice Hockey",
+    "icon": null,
+    "alt": "hockey",
+    "url": "https://www.oddsportal.com/hockey/"
+  },
+  {
+    "name": "Baseball",
+    "icon": null,
+    "alt": "baseball",
+    "url": "https://www.oddsportal.com/baseball/"
+  }
+]
