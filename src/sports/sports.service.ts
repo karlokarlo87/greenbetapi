@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs';
 import * as path from 'path';
  
@@ -14,7 +15,9 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 @Injectable()
 export class SportsService {
-  private sportsData: Sport[];
+  private readonly logger = new Logger(SportsService.name);
+  private sportsData: Sport[] = [];
+  private lastUpdated: Date;
 
   constructor() {
     this.loadSportsData();
@@ -25,16 +28,49 @@ export class SportsService {
       const dataPath = path.join(__dirname, 'data', 'sports.json');
       const fileContent = fs.readFileSync(dataPath, 'utf-8');
       this.sportsData = JSON.parse(fileContent);
+      this.lastUpdated = new Date();
+      this.logger.log(
+        `Sports data loaded into cache. Total sports: ${this.sportsData.length}. Last updated: ${this.lastUpdated.toISOString()}`
+      );
     } catch (error) {
-      console.error('Error loading sports data:', error);
+      this.logger.error('Error loading sports data:', error);
       this.sportsData = [];
     }
   }
 
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleCronRefresh() {
+    this.logger.log('Running hourly sports data refresh from oddsportal.com...');
+    await this.refreshSportsFromWeb();
+  }
+
+  async refreshSportsFromWeb() {
+    try {
+      const scrapedSports = await parseSportsMenu();
+      if (scrapedSports && scrapedSports.length > 0) {
+        this.sportsData = scrapedSports;
+        this.lastUpdated = new Date();
+
+        // Save to JSON file
+        const dataPath = path.join(__dirname, 'data', 'sports.json');
+        fs.writeFileSync(dataPath, JSON.stringify(scrapedSports, null, 2));
+
+        this.logger.log(
+          `Sports data refreshed from web. Total sports: ${this.sportsData.length}. Last updated: ${this.lastUpdated.toISOString()}`
+        );
+      }
+    } catch (error) {
+      this.logger.error('Error refreshing sports from web:', error);
+    }
+  }
+
   getAllSports() {
-    const allsports = parseSportsMenu();
-    console.log(allsports);
-    return allsports
+    return {
+      message: 'List of all sports (cached)',
+      count: this.sportsData.length,
+      lastUpdated: this.lastUpdated?.toISOString(),
+      data: this.sportsData,
+    };
   }
 
   getSportById(id: string) {
@@ -88,7 +124,7 @@ async function parseSportsMenu() {
             ignoreHTTPSErrors: false
         };
 
-  const browser = await puppeteer.launch( puppeteer.launch(browserOptions));
+  const browser = await puppeteer.launch(browserOptions);
  
  
   try {
