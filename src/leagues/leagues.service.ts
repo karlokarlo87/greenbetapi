@@ -2,8 +2,6 @@ import { Injectable, Logger, BadRequestException, Inject } from '@nestjs/common'
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cron } from '@nestjs/schedule';
 import type { Cache } from 'cache-manager';
-import * as fs from 'fs';
-import * as path from 'path';
 import { SportsService } from '../sports/sports.service';
 const puppeteer = require('puppeteer');
 export interface League {
@@ -18,41 +16,55 @@ export interface LeaguesBySport {
   lastUpdated: string;
 }
 
+export interface LeaguesData {
+  [sport: string]: LeaguesBySport;
+}
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 @Injectable()
 export class LeaguesService {
   private readonly logger = new Logger(LeaguesService.name);
+  private allLeaguesData: LeaguesData = {};
 
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly sportsService: SportsService,
   ) {
-    this.loadLeaguesData();
+    this.initializeWithSampleData();
   }
 
-  private async loadLeaguesData() {
-    try {
-      const dataPath = path.join(__dirname, 'data', 'leagues.json');
-      if (fs.existsSync(dataPath)) {
-        const fileContent = fs.readFileSync(dataPath, 'utf-8');
-        const data = JSON.parse(fileContent);
+  private async initializeWithSampleData() {
+    // Initialize with sample data
+    const sampleData: LeaguesData = {
+      football: {
+        sport: 'Football',
+        lastUpdated: new Date().toISOString(),
+        leagues: [
+          { name: 'Premier League', country: 'England', url: 'https://www.oddsportal.com/football/england/premier-league/' },
+          { name: 'La Liga', country: 'Spain', url: 'https://www.oddsportal.com/football/spain/laliga/' },
+          { name: 'Serie A', country: 'Italy', url: 'https://www.oddsportal.com/football/italy/serie-a/' },
+        ],
+      },
+      basketball: {
+        sport: 'Basketball',
+        lastUpdated: new Date().toISOString(),
+        leagues: [
+          { name: 'NBA', country: 'USA', url: 'https://www.oddsportal.com/basketball/usa/nba/' },
+          { name: 'EuroLeague', country: 'Europe', url: 'https://www.oddsportal.com/basketball/europe/euroleague/' },
+        ],
+      },
+    };
 
-        // Load data into cache
-        const cachePromises = Object.keys(data).map((sport) =>
-          this.cacheManager.set(`leagues:${sport.toLowerCase()}`, data[sport])
-        );
-        await Promise.all(cachePromises);
+    this.allLeaguesData = sampleData;
 
-        this.logger.log(
-          `Leagues data loaded into cache. Total sports: ${Object.keys(data).length}`
-        );
-      } else {
-        this.logger.warn('Leagues data file not found. Starting with empty cache.');
-      }
-    } catch (error) {
-      this.logger.error('Error loading leagues data:', error);
-    }
+    // Load into cache
+    const cachePromises = Object.keys(sampleData).map((sport) =>
+      this.cacheManager.set(`leagues:${sport.toLowerCase()}`, sampleData[sport])
+    );
+    await Promise.all(cachePromises);
+
+    this.logger.log('Leagues service initialized with sample data');
   }
 
   async getLeaguesBySport(sportName: string) {
@@ -84,32 +96,11 @@ export class LeaguesService {
   }
 
   async getAllLeagues() {
-    try {
-      const dataPath = path.join(__dirname, 'data', 'leagues.json');
-      if (fs.existsSync(dataPath)) {
-        const fileContent = fs.readFileSync(dataPath, 'utf-8');
-        const allLeagues = JSON.parse(fileContent);
-
-        return {
-          message: 'All leagues data (from cache)',
-          sports: Object.keys(allLeagues).length,
-          data: allLeagues,
-        };
-      }
-
-      return {
-        message: 'No leagues data available',
-        sports: 0,
-        data: {},
-      };
-    } catch (error) {
-      this.logger.error('Error getting all leagues:', error);
-      return {
-        message: 'Error retrieving leagues data',
-        sports: 0,
-        data: {},
-      };
-    }
+    return {
+      message: 'All leagues data (from memory)',
+      sports: Object.keys(this.allLeaguesData).length,
+      data: this.allLeaguesData,
+    };
   }
 
   @Cron('*/10 * * * *') // Run every 10 minutes
@@ -132,7 +123,7 @@ export class LeaguesService {
       if (leaguesData && leaguesData.length > 0) {
         // Process and cache the leagues data
         // Group by sport
-        const groupedBySport: any = {};
+        const groupedBySport: LeaguesData = {};
 
         leaguesData.forEach(entry => {
           if (!groupedBySport[entry.sport]) {
@@ -152,15 +143,14 @@ export class LeaguesService {
           });
         });
 
+        // Store in memory
+        this.allLeaguesData = groupedBySport;
+
         // Update NestJS cache
         const cachePromises = Object.keys(groupedBySport).map((sport) =>
           this.cacheManager.set(`leagues:${sport.toLowerCase()}`, groupedBySport[sport])
         );
         await Promise.all(cachePromises);
-
-        // Save to JSON file
-        const dataPath = path.join(__dirname, 'data', 'leagues.json');
-        fs.writeFileSync(dataPath, JSON.stringify(groupedBySport, null, 2));
 
         this.logger.log(`Leagues cache refreshed. Total sports: ${Object.keys(groupedBySport).length}`);
       }
