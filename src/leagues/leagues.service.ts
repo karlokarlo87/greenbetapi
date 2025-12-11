@@ -163,7 +163,7 @@ async function parseLeaguesFromSports() {
                             };
                         });
 
-                        if (items.length > 0) leagues.push(items);
+                        if (items.length > 0 && items) leagues.push(items);
                     }
                 });
 
