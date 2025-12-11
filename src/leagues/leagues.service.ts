@@ -36,7 +36,7 @@ export class LeaguesService {
 
  async  getLeaguesBySport(sportName: string) {
 
-    const sportsData = this.sportsService.getCachedSportsData();
+    const sportsData = this.sportsService.getCachedSportsData().filter(s => s.name.toLowerCase() === sportName.toLowerCase());
     const leaguesData = await parseLeaguesFromSports(sportsData);
     return leaguesData;
  

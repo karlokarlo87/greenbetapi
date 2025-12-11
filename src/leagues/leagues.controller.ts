@@ -15,15 +15,12 @@ export class LeaguesController {
   @Get()
   async getLeagues(@Query('name') sportName?: string) {
     if (sportName) {
-      const cacheKey = `leagues_${sportName}`;
-
-      const cached = await this.cacheManager.get(cacheKey);
-      if (cached) return cached;
+    
 
       const data = await this.leaguesService.getLeaguesBySport(sportName);
 
       // cache for 10 minutes
-      await this.cacheManager.set(cacheKey, data,  10 * 60 * 1000);
+     
 
       return data;
     }
