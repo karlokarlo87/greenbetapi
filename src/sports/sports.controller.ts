@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { SportsService } from './sports.service';
 
 @Controller('sports')
@@ -6,7 +6,10 @@ export class SportsController {
   constructor(private readonly sportsService: SportsService) {}
 
   @Get()
-  getAllSports() {
+  getAllSports(@Query('name') name?: string) {
+    if (name) {
+      return this.sportsService.getSportByName(name);
+    }
     return this.sportsService.getAllSports();
   }
 
