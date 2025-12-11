@@ -115,7 +115,7 @@ export class OddsService {
         let homeTeamLogo: string | null = null;
         let awayTeamLogo: string | null = null;
         
-        if (teamLinks.length >= 2) {
+        if (teamLinks.length == 2) {
           homeTeam = teamLinks[0].getAttribute('title');
           awayTeam = teamLinks[1].getAttribute('title');
           
@@ -130,31 +130,41 @@ export class OddsService {
         const parentRow = gameRow.closest('.eventRow');
         const oddContainers = parentRow ? parentRow.querySelectorAll('[data-testid="odd-container-default"] p') : [];
         let odds = { home: null as string | null, draw: null as string | null, away: null as string | null };
+        console.log('Odd containers found:', oddContainers.length);
         
-        if (oddContainers.length >= 3) {
-          odds.home = oddContainers[0].textContent.trim();
-          odds.draw = oddContainers[1].textContent.trim();
-          odds.away = oddContainers[2].textContent.trim();
-        }
+          
+          if (oddContainers.length >= 3) {
+            odds = {
+              home: oddContainers[0].textContent.trim(),
+              draw: oddContainers[1].textContent.trim(),
+              away: oddContainers[2].textContent.trim()
+            };
+          } else if (oddContainers.length >= 2) {
+            odds = {
+              home: oddContainers[0].textContent.trim(),
+              draw: null,
+              away: oddContainers[1].textContent.trim()
+            };
+          }
         
         // Get number of bookmakers
         const bookiesElement = parentRow ? parentRow.querySelector('[data-testid="bookies-amount-item"] div') : null;
         const bookmakers = bookiesElement ? bookiesElement.textContent.trim() : null;
         
         // Build match object
-        if (homeTeam && awayTeam) {
-          matches.push({
-            date: currentDate,
-            time: time,
-            homeTeam: homeTeam,
-            homeTeamLogo: homeTeamLogo,
-            awayTeam: awayTeam,
-            awayTeamLogo: awayTeamLogo,
-            odds: odds,
-            bookmakers: bookmakers,
-            url: matchUrl ? (matchUrl.startsWith('http') ? matchUrl : 'https://www.oddsportal.com' + matchUrl) : null
-          });
-        }
+          if (homeTeam && awayTeam) {
+            matches.push({
+              date: currentDate,
+              time: time,
+              homeTeam: homeTeam,
+              homeTeamLogo: homeTeamLogo,
+              awayTeam: awayTeam,
+              awayTeamLogo: awayTeamLogo,
+              odds: odds,
+              bookmakers: bookmakers,
+              url: matchUrl ? (matchUrl.startsWith('http') ? matchUrl : 'https://www.oddsportal.com' + matchUrl) : null
+            });
+          }
       });
       
       return {
