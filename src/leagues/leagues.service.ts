@@ -14,7 +14,8 @@ export interface LeaguesBySport {
   lastUpdated: string;
 }
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 @Injectable()
 export class LeaguesService {
   private readonly logger = new Logger(LeaguesService.name);
@@ -25,7 +26,26 @@ export class LeaguesService {
   }
 
   private loadLeaguesData() {
- 
+    try {
+      const dataPath = path.join(__dirname, 'data', 'leagues.json');
+      if (fs.existsSync(dataPath)) {
+        const fileContent = fs.readFileSync(dataPath, 'utf-8');
+        const data = JSON.parse(fileContent);
+
+        // Load data into cache
+        Object.keys(data).forEach((sport) => {
+          this.leaguesCache.set(sport.toLowerCase(), data[sport]);
+        });
+
+        this.logger.log(
+          `Leagues data loaded into cache. Total sports: ${this.leaguesCache.size}`
+        );
+      } else {
+        this.logger.warn('Leagues data file not found. Starting with empty cache.');
+      }
+    } catch (error) {
+      this.logger.error('Error loading leagues data:', error);
+    }
   }
 
   getLeaguesBySport(sportName: string) {
@@ -69,12 +89,13 @@ export class LeaguesService {
 }
 
 async function parseLeaguesFromSports() {
-    if (!fs.existsSync('sports.json')) {
-        console.error('Error: sports.json not found.');
+    const sportsJsonPath = path.join(__dirname, '../sports/data', 'sports.json');
+    if (!fs.existsSync(sportsJsonPath)) {
+        console.error('Error: sports.json not found at', sportsJsonPath);
         return;
     }
 
-    const sportsData = JSON.parse(fs.readFileSync('sports.json', 'utf-8'));
+    const sportsData = JSON.parse(fs.readFileSync(sportsJsonPath, 'utf-8'));
     console.log(`Found ${sportsData.length} sports\n`);
 
     const browser = await puppeteer.launch({
@@ -156,7 +177,7 @@ async function parseLeaguesFromSports() {
                             const anchor = a as HTMLAnchorElement;
                             return {
                                 name: anchor.textContent.trim(),
-                                alt : (anchor.getAttribute("href") || '').split('/').filter(Boolean).pop(),
+                                alt: ((anchor.getAttribute("href") || '').split('/').filter(Boolean).pop() ?? ''),
                                 url: anchor.href.startsWith("http")
                                     ? anchor.href
                                     : "https://www.oddsportal.com" + anchor.getAttribute("href")
@@ -169,9 +190,6 @@ async function parseLeaguesFromSports() {
 
                 return { countries, leagues };
             }, sport);
-
-        fs.writeFileSync("countries.json", JSON.stringify(countries, null, 2));
-        console.log("\n✓ All sports processed → leagues.json saved");
             // ---------------------------
             //  MATCH LEAGUES → COUNTRIES
             // ---------------------------
