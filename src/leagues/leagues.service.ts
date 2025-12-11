@@ -28,64 +28,25 @@ export class LeaguesService {
 
   private loadLeaguesData() {
     try {
-      const dataPath = path.join(__dirname, 'data', 'leagues.json');
-      if (fs.existsSync(dataPath)) {
-        const fileContent = fs.readFileSync(dataPath, 'utf-8');
-        const data = JSON.parse(fileContent);
-
-        // Load data into cache
-        Object.keys(data).forEach((sport) => {
-          this.leaguesCache.set(sport.toLowerCase(), data[sport]);
-        });
-
-        this.logger.log(
-          `Leagues data loaded into cache. Total sports: ${this.leaguesCache.size}`
-        );
-      } else {
-        this.logger.warn('Leagues data file not found. Starting with empty cache.');
-      }
+     
     } catch (error) {
       this.logger.error('Error loading leagues data:', error);
     }
   }
 
-  getLeaguesBySport(sportName: string) {
-    if (!sportName) {
-      throw new BadRequestException('Sport name is required');
-    }
+ async  getLeaguesBySport(sportName: string) {
 
-    const normalizedSport = sportName.toLowerCase();
-    const leaguesData = this.leaguesCache.get(normalizedSport);
-
-    if (!leaguesData) {
-      return {
-        message: `No leagues found for sport: ${sportName}`,
-        sport: sportName,
-        count: 0,
-        data: [],
-      };
-    }
-
-    return {
-      message: `Leagues for ${sportName}`,
-      sport: leaguesData.sport,
-      count: leaguesData.leagues.length,
-      lastUpdated: leaguesData.lastUpdated,
-      data: leaguesData.leagues,
-    };
+         const sportsData = this.sportsService.getCachedSportsData();
+    const leaguesData = await parseLeaguesFromSports(sportsData);
+    return leaguesData;
+ 
   }
 
-  getAllLeagues() {
-    const allLeagues: any = {};
-    this.leaguesCache.forEach((value, key) => {
-      allLeagues[key] = value;
-    });
-
-    return {
-      message: 'All leagues data',
-      sports: Object.keys(allLeagues).length,
-      data: allLeagues,
-    };
+  async getAllLeagues() {
+     const sportsData = this.sportsService.getCachedSportsData();
+    const leaguesData = await parseLeaguesFromSports(sportsData);
+    return leaguesData;
+  
   }
 
   async refreshLeaguesFromWeb() {
@@ -128,8 +89,7 @@ export class LeaguesService {
         });
 
         // Save to JSON file
-        const dataPath = path.join(__dirname, 'data', 'leagues.json');
-        fs.writeFileSync(dataPath, JSON.stringify(groupedBySport, null, 2));
+  
 
         this.logger.log(`Leagues data refreshed. Total sports: ${Object.keys(groupedBySport).length}`);
       }
@@ -140,6 +100,7 @@ export class LeaguesService {
 }
 
 async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: string; url: string }>) {
+ 
     if (!sportsData || sportsData.length === 0) {
         console.error('Error: No sports data provided');
         return;
@@ -184,11 +145,11 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
 
             await page.goto(sport.url, {
                 waitUntil: 'networkidle0',
-                timeout: 90000
+                timeout: 3000
             });
 
-            await page.waitForSelector("main", { timeout: 30000 });
-            await delay(3000);
+            await page.waitForSelector("main", { timeout: 3000 });
+            await delay(1000);
 
             console.log("Page loaded. Extracting...");
 
