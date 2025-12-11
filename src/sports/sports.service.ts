@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 
-interface Sport {
+export interface Sport {
   name: string;
   icon: string | null;
   alt: string;
