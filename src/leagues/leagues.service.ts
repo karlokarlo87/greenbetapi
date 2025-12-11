@@ -1,4 +1,7 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cron } from '@nestjs/schedule';
+import type { Cache } from 'cache-manager';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SportsService } from '../sports/sports.service';
@@ -20,33 +23,99 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 @Injectable()
 export class LeaguesService {
   private readonly logger = new Logger(LeaguesService.name);
-  private leaguesCache: Map<string, LeaguesBySport> = new Map();
 
-  constructor(private readonly sportsService: SportsService) {
+  constructor(
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly sportsService: SportsService,
+  ) {
     this.loadLeaguesData();
   }
 
-  private loadLeaguesData() {
+  private async loadLeaguesData() {
     try {
-     
+      const dataPath = path.join(__dirname, 'data', 'leagues.json');
+      if (fs.existsSync(dataPath)) {
+        const fileContent = fs.readFileSync(dataPath, 'utf-8');
+        const data = JSON.parse(fileContent);
+
+        // Load data into cache
+        const cachePromises = Object.keys(data).map((sport) =>
+          this.cacheManager.set(`leagues:${sport.toLowerCase()}`, data[sport])
+        );
+        await Promise.all(cachePromises);
+
+        this.logger.log(
+          `Leagues data loaded into cache. Total sports: ${Object.keys(data).length}`
+        );
+      } else {
+        this.logger.warn('Leagues data file not found. Starting with empty cache.');
+      }
     } catch (error) {
       this.logger.error('Error loading leagues data:', error);
     }
   }
 
- async  getLeaguesBySport(sportName: string) {
+  async getLeaguesBySport(sportName: string) {
+    if (!sportName) {
+      throw new BadRequestException('Sport name is required');
+    }
 
-         const sportsData = this.sportsService.getCachedSportsData();
-    const leaguesData = await parseLeaguesFromSports(sportsData);
-    return leaguesData;
- 
+    const normalizedSport = sportName.toLowerCase();
+    const leaguesData = await this.cacheManager.get<LeaguesBySport>(
+      `leagues:${normalizedSport}`
+    );
+
+    if (!leaguesData) {
+      return {
+        message: `No leagues found for sport: ${sportName}`,
+        sport: sportName,
+        count: 0,
+        data: [],
+      };
+    }
+
+    return {
+      message: `Leagues for ${sportName} (cached)`,
+      sport: leaguesData.sport,
+      count: leaguesData.leagues.length,
+      lastUpdated: leaguesData.lastUpdated,
+      data: leaguesData.leagues,
+    };
   }
 
   async getAllLeagues() {
-     const sportsData = this.sportsService.getCachedSportsData();
-    const leaguesData = await parseLeaguesFromSports(sportsData);
-    return leaguesData;
-  
+    try {
+      const dataPath = path.join(__dirname, 'data', 'leagues.json');
+      if (fs.existsSync(dataPath)) {
+        const fileContent = fs.readFileSync(dataPath, 'utf-8');
+        const allLeagues = JSON.parse(fileContent);
+
+        return {
+          message: 'All leagues data (from cache)',
+          sports: Object.keys(allLeagues).length,
+          data: allLeagues,
+        };
+      }
+
+      return {
+        message: 'No leagues data available',
+        sports: 0,
+        data: {},
+      };
+    } catch (error) {
+      this.logger.error('Error getting all leagues:', error);
+      return {
+        message: 'Error retrieving leagues data',
+        sports: 0,
+        data: {},
+      };
+    }
+  }
+
+  @Cron('*/10 * * * *') // Run every 10 minutes
+  async handleCacheRefresh() {
+    this.logger.log('Running 10-minute leagues cache refresh...');
+    await this.refreshLeaguesFromWeb();
   }
 
   async refreshLeaguesFromWeb() {
@@ -83,15 +152,17 @@ export class LeaguesService {
           });
         });
 
-        // Update cache
-        Object.keys(groupedBySport).forEach(sport => {
-          this.leaguesCache.set(sport.toLowerCase(), groupedBySport[sport]);
-        });
+        // Update NestJS cache
+        const cachePromises = Object.keys(groupedBySport).map((sport) =>
+          this.cacheManager.set(`leagues:${sport.toLowerCase()}`, groupedBySport[sport])
+        );
+        await Promise.all(cachePromises);
 
         // Save to JSON file
-  
+        const dataPath = path.join(__dirname, 'data', 'leagues.json');
+        fs.writeFileSync(dataPath, JSON.stringify(groupedBySport, null, 2));
 
-        this.logger.log(`Leagues data refreshed. Total sports: ${Object.keys(groupedBySport).length}`);
+        this.logger.log(`Leagues cache refreshed. Total sports: ${Object.keys(groupedBySport).length}`);
       }
     } catch (error) {
       this.logger.error('Error refreshing leagues from web:', error);
@@ -100,7 +171,6 @@ export class LeaguesService {
 }
 
 async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: string; url: string }>) {
- 
     if (!sportsData || sportsData.length === 0) {
         console.error('Error: No sports data provided');
         return;
@@ -145,11 +215,11 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
 
             await page.goto(sport.url, {
                 waitUntil: 'networkidle0',
-                timeout: 3000
+                timeout: 90000
             });
 
-            await page.waitForSelector("main", { timeout: 3000 });
-            await delay(1000);
+            await page.waitForSelector("main", { timeout: 30000 });
+            await delay(3000);
 
             console.log("Page loaded. Extracting...");
 
