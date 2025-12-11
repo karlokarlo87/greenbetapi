@@ -57,7 +57,22 @@ export class LeaguesService {
     const normalizedSport = sportName.toLowerCase();
     const leaguesData = this.leaguesCache.get(normalizedSport);
 
-   return parseLeaguesFromSports()
+    if (!leaguesData) {
+      return {
+        message: `No leagues found for sport: ${sportName}`,
+        sport: sportName,
+        count: 0,
+        data: [],
+      };
+    }
+
+    return {
+      message: `Leagues for ${sportName}`,
+      sport: leaguesData.sport,
+      count: leaguesData.leagues.length,
+      lastUpdated: leaguesData.lastUpdated,
+      data: leaguesData.leagues,
+    };
   }
 
   getAllLeagues() {
