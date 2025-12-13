@@ -73,6 +73,24 @@ export class SportsService {
     return this.sportsData;
   }
 
+  async getMatchDetail(matchUrl: string) {
+    try {
+      this.logger.log(`Fetching match details for: ${matchUrl}`);
+      const matchData = await parseMatchDetail(matchUrl);
+      return {
+        message: 'Match details retrieved successfully',
+        data: matchData,
+      };
+    } catch (error) {
+      this.logger.error('Error fetching match details:', error);
+      return {
+        message: 'Error fetching match details',
+        error: error.message,
+        data: null,
+      };
+    }
+  }
+
 }
 
 async function parseSportsMenu() {
@@ -155,6 +173,122 @@ async function parseSportsMenu() {
     
   } catch (error) {
     console.error('Error:', error.message);
+  } finally {
+    await browser.close();
+  }
+}
+
+async function parseMatchDetail(matchUrl: string) {
+  const browserOptions = {
+    headless: 'new',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--flag-switches-begin --disable-site-isolation-trials --flag-switches-end'
+    ],
+    ignoreDefaultArgs: ['--enable-automation'],
+    ignoreHTTPSErrors: false
+  };
+
+  const browser = await puppeteer.launch(browserOptions);
+
+  try {
+    const page = await browser.newPage();
+
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36');
+
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'ka,en-US;q=0.9,en;q=0.8',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1'
+    });
+
+    console.log(`Navigating to: ${matchUrl}`);
+
+    await page.goto(matchUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+    console.log('Page loaded, waiting for match content...');
+
+    // Wait for main content
+    await page.waitForSelector('main', { timeout: 30000 });
+    await delay(3000);
+
+    // Parse match details
+    const matchData = await page.evaluate(() => {
+      const data: any = {
+        teams: {},
+        score: {},
+        odds: [],
+        matchInfo: {},
+      };
+
+      // Get team names
+      const teamElements = document.querySelectorAll('a[class*="participant"]');
+      if (teamElements.length >= 2) {
+        data.teams.home = teamElements[0]?.textContent?.trim() || '';
+        data.teams.away = teamElements[1]?.textContent?.trim() || '';
+      }
+
+      // Get score
+      const scoreElements = document.querySelectorAll('p[class*="score"]');
+      if (scoreElements.length >= 2) {
+        data.score.home = scoreElements[0]?.textContent?.trim() || '';
+        data.score.away = scoreElements[1]?.textContent?.trim() || '';
+      }
+
+      // Get match date/time
+      const dateElement = document.querySelector('p[class*="date"]');
+      if (dateElement) {
+        data.matchInfo.date = dateElement.textContent?.trim() || '';
+      }
+
+      // Get odds data from the table
+      const oddsRows = document.querySelectorAll('div[class*="border-black-main"] a');
+      oddsRows.forEach((row) => {
+        const bookmaker = row.querySelector('img')?.alt || row.querySelector('p')?.textContent?.trim() || '';
+        const oddsElements = row.querySelectorAll('p');
+
+        if (bookmaker && oddsElements.length >= 3) {
+          data.odds.push({
+            bookmaker: bookmaker,
+            odds: {
+              home: oddsElements[0]?.textContent?.trim() || '',
+              draw: oddsElements[1]?.textContent?.trim() || '',
+              away: oddsElements[2]?.textContent?.trim() || '',
+            }
+          });
+        }
+      });
+
+      // Get event info (league, country, etc.)
+      const breadcrumbs = document.querySelectorAll('a[class*="truncate"]');
+      const breadcrumbData: string[] = [];
+      breadcrumbs.forEach(bc => {
+        const text = bc.textContent?.trim();
+        if (text) breadcrumbData.push(text);
+      });
+
+      if (breadcrumbData.length > 0) {
+        data.matchInfo.sport = breadcrumbData[0] || '';
+        data.matchInfo.country = breadcrumbData[1] || '';
+        data.matchInfo.league = breadcrumbData[2] || '';
+      }
+
+      return data;
+    });
+
+    console.log('Match data extracted successfully');
+    return matchData;
+
+  } catch (error) {
+    console.error('Error parsing match detail:', error.message);
+    throw error;
   } finally {
     await browser.close();
   }
