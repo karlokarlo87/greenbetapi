@@ -228,45 +228,56 @@ async function parseMatchDetail(matchUrl: string) {
         matchInfo: {},
       };
 
-      // Get team names
-      const teamElements = document.querySelectorAll('a[class*="participant"]');
-      if (teamElements.length >= 2) {
-        data.teams.home = teamElements[0]?.textContent?.trim() || '';
-        data.teams.away = teamElements[1]?.textContent?.trim() || '';
-      }
-
-      // Get score
-      const scoreElements = document.querySelectorAll('p[class*="score"]');
-      if (scoreElements.length >= 2) {
-        data.score.home = scoreElements[0]?.textContent?.trim() || '';
-        data.score.away = scoreElements[1]?.textContent?.trim() || '';
-      }
-
-      // Get match date/time
-      const dateElement = document.querySelector('p[class*="date"]');
-      if (dateElement) {
-        data.matchInfo.date = dateElement.textContent?.trim() || '';
-      }
-
-      // Get odds data from the table
-      const oddsRows = document.querySelectorAll('div[class*="border-black-main"] a');
-      oddsRows.forEach((row) => {
-        const bookmaker = row.querySelector('img')?.alt || row.querySelector('p')?.textContent?.trim() || '';
-        const oddsElements = row.querySelectorAll('p');
-
-        if (bookmaker && oddsElements.length >= 3) {
-          data.odds.push({
-            bookmaker: bookmaker,
-            odds: {
-              home: oddsElements[0]?.textContent?.trim() || '',
-              draw: oddsElements[1]?.textContent?.trim() || '',
-              away: oddsElements[2]?.textContent?.trim() || '',
-            }
-          });
+      // Parse team names and date from react-event-header
+      const eventHeader = document.getElementById('react-event-header');
+      if (eventHeader) {
+        // Get team names from event header
+        const teamElements = eventHeader.querySelectorAll('a[class*="participant"]');
+        if (teamElements.length >= 2) {
+          data.teams.home = teamElements[0]?.textContent?.trim() || '';
+          data.teams.away = teamElements[1]?.textContent?.trim() || '';
         }
-      });
 
-      // Get event info (league, country, etc.)
+        // Get match date/time from event header
+        const dateElement = eventHeader.querySelector('p[class*="date"]');
+        if (dateElement) {
+          data.matchInfo.date = dateElement.textContent?.trim() || '';
+        }
+
+        // Get score from event header
+        const scoreElements = eventHeader.querySelectorAll('p[class*="score"]');
+        if (scoreElements.length >= 2) {
+          data.score.home = scoreElements[0]?.textContent?.trim() || '';
+          data.score.away = scoreElements[1]?.textContent?.trim() || '';
+        }
+      }
+
+      // Find and parse event-container for odds data
+      const eventContainer = document.querySelector('[class*="event-container"]') ||
+                            document.getElementById('event-container') ||
+                            document.querySelector('div[class*="eventContainer"]');
+
+      if (eventContainer) {
+        // Get odds data from the event container
+        const oddsRows = eventContainer.querySelectorAll('div[class*="border-black-main"] a');
+        oddsRows.forEach((row) => {
+          const bookmaker = row.querySelector('img')?.alt || row.querySelector('p')?.textContent?.trim() || '';
+          const oddsElements = row.querySelectorAll('p');
+
+          if (bookmaker && oddsElements.length >= 3) {
+            data.odds.push({
+              bookmaker: bookmaker,
+              odds: {
+                home: oddsElements[0]?.textContent?.trim() || '',
+                draw: oddsElements[1]?.textContent?.trim() || '',
+                away: oddsElements[2]?.textContent?.trim() || '',
+              }
+            });
+          }
+        });
+      }
+
+      // Get event info (league, country, etc.) from breadcrumbs
       const breadcrumbs = document.querySelectorAll('a[class*="truncate"]');
       const breadcrumbData: string[] = [];
       breadcrumbs.forEach(bc => {
