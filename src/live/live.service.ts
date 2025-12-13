@@ -218,7 +218,7 @@ async function parseInPlaySports() {
               const bookmakers = bookiesElement ? bookiesElement.textContent.trim() : null;
               
               // Extract match URL
-              const matchLink = gameRow.closest('a');
+              const matchLink = gameRow.querySelector('a');
               const matchUrl = matchLink ? 'https://www.oddsportal.com' + matchLink.getAttribute('href') : null;
               
               matches.push({
