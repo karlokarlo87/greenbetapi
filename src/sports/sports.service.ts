@@ -243,7 +243,7 @@ async function parseMatchDetail(matchUrl: string) {
         }
 
         // Get match date/time from event header
-        const dateElement = eventHeader.querySelector('p[class*="date"]');
+        const dateElement = eventHeader.querySelector('[data-testid="game-time-item"]');
         if (dateElement) {
           data.matchInfo.date = dateElement.textContent?.trim() || '';
         }
@@ -263,26 +263,26 @@ async function parseMatchDetail(matchUrl: string) {
 
       if (eventContainer) {
         // Get odds data from the event container
-        const oddsRows = eventContainer.querySelectorAll('div[class*="border-black-main"] a');
-        oddsRows.forEach((row) => {
-          const bookmaker = row.querySelector('img')?.alt || row.querySelector('p')?.textContent?.trim() || '';
-          const oddsElements = row.querySelectorAll('p');
-
-          if (bookmaker && oddsElements.length >= 3) {
-            data.odds.push({
-              bookmaker: bookmaker,
-              odds: {
-                home: oddsElements[0]?.textContent?.trim() || '',
-                draw: oddsElements[1]?.textContent?.trim() || '',
-                away: oddsElements[2]?.textContent?.trim() || '',
-              }
-            });
-          }
+        const oddsRows = eventContainer.querySelectorAll('[data-testid="over-under-expanded-row"]');
+        oddsRows.forEach((row,ind) => {
+          if(ind>0) return; // limit number of odds entries
+          const bookmaker = row.querySelectorAll('.odds-link');
+          const oddsarr={};
+           bookmaker.forEach((odd,index) => {
+              const ol = odd.textContent?.trim();
+             oddsarr[index]=ol;
+           });
+         
+            data.odds.push(
+                oddsarr
+              
+            );
+           
         });
       }
 
       // Get event info (league, country, etc.) from breadcrumbs
-      const breadcrumbs = document.querySelectorAll('a[class*="truncate"]');
+      const breadcrumbs = document.querySelectorAll('[data-testid="breadcrumbs-line"] ul:nth-child(2) li a');
       const breadcrumbData: string[] = [];
       breadcrumbs.forEach(bc => {
         const text = bc.textContent?.trim();
@@ -290,9 +290,9 @@ async function parseMatchDetail(matchUrl: string) {
       });
 
       if (breadcrumbData.length > 0) {
-        data.matchInfo.sport = breadcrumbData[0] || '';
-        data.matchInfo.country = breadcrumbData[1] || '';
-        data.matchInfo.league = breadcrumbData[2] || '';
+        data.matchInfo.sport = breadcrumbData[1] || '';
+        data.matchInfo.country = breadcrumbData[2] || '';
+        data.matchInfo.league = breadcrumbData[3] || '';
       }
 
       return data;
