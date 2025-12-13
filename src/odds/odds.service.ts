@@ -99,7 +99,7 @@ export class OddsService {
         if (!gameRow) return; // Only skip if no match data
         
         // Get match link
-        const matchLink = gameRow.closest('a');
+        const matchLink = gameRow.querySelector('a');
         const matchUrl = matchLink ? matchLink.getAttribute('href') : null;
         
         // Get time
@@ -162,7 +162,7 @@ export class OddsService {
               awayTeamLogo: awayTeamLogo,
               odds: odds,
               bookmakers: bookmakers,
-              url: matchUrl ? (matchUrl.startsWith('http') ? matchUrl : 'https://www.oddsportal.com' + matchUrl) : null
+              url: matchUrl ?  'https://www.oddsportal.com' + matchUrl : null
             });
           }
       });
