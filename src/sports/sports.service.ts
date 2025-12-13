@@ -231,11 +231,15 @@ async function parseMatchDetail(matchUrl: string) {
       // Parse team names and date from react-event-header
       const eventHeader = document.getElementById('react-event-header');
       if (eventHeader) {
+        const teamElementshome = eventHeader.querySelector('[data-testid="game-host"]');
+        if (teamElementshome) {
+          data.teams.home = teamElementshome?.textContent?.trim() || '';
+        
+        }
         // Get team names from event header
-        const teamElements = eventHeader.querySelectorAll('a[class*="participant"]');
-        if (teamElements.length >= 2) {
-          data.teams.home = teamElements[0]?.textContent?.trim() || '';
-          data.teams.away = teamElements[1]?.textContent?.trim() || '';
+        const teamElementsguest = eventHeader.querySelector('[data-testid="game-guest"]');
+        if (teamElementsguest) {
+          data.teams.away = teamElementsguest?.textContent?.trim() || '';
         }
 
         // Get match date/time from event header
