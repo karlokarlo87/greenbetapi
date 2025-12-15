@@ -254,6 +254,39 @@ async function parseMatchDetail(matchUrl: string) {
           data.score.home = scoreElements[0]?.textContent?.trim() || '';
           data.score.away = scoreElements[1]?.textContent?.trim() || '';
         }
+              // FULL TIME SCORE
+      const scoreStrong = eventHeader.querySelector('strong');
+      if (scoreStrong) {
+        const ft = scoreStrong.textContent?.trim();
+        if (ft?.includes(':')) {
+          const [home, away] = ft.split(':');
+          data.score.fullTime = { home, away };
+        }
+      }
+
+            // HALF TIME / PERIOD SCORES
+      const headerText = eventHeader.textContent || '';
+      const periodsMatch = headerText.match(/\(([^)]+)\)/);
+
+      if (periodsMatch) {
+        const periods = periodsMatch[1]
+          .split(',')
+          .map(p => p.trim());
+
+        // HALF TIME
+        if (periods[0]?.includes(':')) {
+          const [htHome, htAway] = periods[0].split(':');
+          data.score.halfTime = { home: htHome, away: htAway };
+        }
+
+        // SECOND HALF
+        if (periods[1]?.includes(':')) {
+          const [shHome, shAway] = periods[1].split(':');
+          data.score.secondHalf = { home: shHome, away: shAway };
+        }
+      }
+
+
       }
 
       // Find and parse event-container for odds data
@@ -266,7 +299,7 @@ async function parseMatchDetail(matchUrl: string) {
         const oddsRows = eventContainer.querySelectorAll('[data-testid="over-under-expanded-row"]');
         oddsRows.forEach((row,ind) => {
           if(ind>0) return; // limit number of odds entries
-          const bookmaker = row.querySelectorAll('.odds-link');
+          const bookmaker = row.querySelectorAll('.odds-link,.odds-text');
           const oddsarr={};
            bookmaker.forEach((odd,index) => {
               const ol = odd.textContent?.trim();
