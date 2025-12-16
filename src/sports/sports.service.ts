@@ -80,16 +80,16 @@ export class SportsService {
   }
 
   async getAllSports() {
-    // Get sports from database
+    // Get sports from database ordered by ID
     const sports = await this.sportRepository.find({
-      order: { name: 'ASC' },
+      order: { id: 'ASC' },
     });
     return sports;
   }
 
   async getCachedSportsData(): Promise<Sport[]> {
     return await this.sportRepository.find({
-      order: { name: 'ASC' },
+      order: { id: 'ASC' },
     });
   }
 
