@@ -23,21 +23,30 @@ export class LiveService {
 
 async function parseInPlaySports() {
   const inPlayUrl = 'https://www.oddsportal.com/inplay-odds/';
-  
-        const browserOptions = {
-            headless: 'new',
-            executablePath: '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome',
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-features=IsolateOrigins,site-per-process',
-                '--flag-switches-begin --disable-site-isolation-trials --flag-switches-end'
-            ],
-            ignoreDefaultArgs: ['--enable-automation'],
-            ignoreHTTPSErrors: false
-        };
+
+  // Try to use Playwright's Chrome if available, otherwise let Puppeteer auto-detect
+  const fs = require('fs');
+  const linuxChromePath = '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome';
+  const hasLinuxChrome = fs.existsSync(linuxChromePath);
+
+  const browserOptions: any = {
+    headless: 'new',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--flag-switches-begin --disable-site-isolation-trials --flag-switches-end'
+    ],
+    ignoreDefaultArgs: ['--enable-automation'],
+    ignoreHTTPSErrors: false
+  };
+
+  // Only set executablePath if the Linux Chrome exists
+  if (hasLinuxChrome) {
+    browserOptions.executablePath = linuxChromePath;
+  }
 
   const browser = await puppeteer.launch(browserOptions);
 

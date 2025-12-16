@@ -287,9 +287,13 @@ export class OddsService {
   }
 
   private async scrapeLeagueOdds(leagueUrl: string): Promise<any> {
-    const browserOptions = {
+    // Try to use Playwright's Chrome if available, otherwise let Puppeteer auto-detect
+    const fs = require('fs');
+    const linuxChromePath = '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome';
+    const hasLinuxChrome = fs.existsSync(linuxChromePath);
+
+    const browserOptions: any = {
       headless: 'new',
-      executablePath: '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -301,6 +305,11 @@ export class OddsService {
       ignoreDefaultArgs: ['--enable-automation'],
       ignoreHTTPSErrors: false
     };
+
+    // Only set executablePath if the Linux Chrome exists
+    if (hasLinuxChrome) {
+      browserOptions.executablePath = linuxChromePath;
+    }
 
     const browser = await puppeteer.launch(browserOptions);
 

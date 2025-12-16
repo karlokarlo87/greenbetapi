@@ -264,9 +264,13 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
 
     console.log(`[parseLeaguesFromSports] Starting to parse ${sportsData.length} sports`);
 
-    const browser = await puppeteer.launch({
+    // Try to use Playwright's Chrome if available, otherwise let Puppeteer auto-detect
+    const fs = require('fs');
+    const linuxChromePath = '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome';
+    const hasLinuxChrome = fs.existsSync(linuxChromePath);
+
+    const browserOptions: any = {
         headless: 'new',
-        executablePath: '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome',
         args: [
             '--no-sandbox', '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
@@ -275,7 +279,14 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
             '--flag-switches-begin --disable-site-isolation-trials --flag-switches-end'
         ],
         ignoreDefaultArgs: ['--enable-automation']
-    });
+    };
+
+    // Only set executablePath if the Linux Chrome exists
+    if (hasLinuxChrome) {
+        browserOptions.executablePath = linuxChromePath;
+    }
+
+    const browser = await puppeteer.launch(browserOptions);
 
     const finalOutput: Array<{ sport: any; country: string; url: string; flag: string | null; leagues: Array<{ name: string; alt: string; url: string }> }> = [];
 
