@@ -106,7 +106,22 @@ export class LeaguesService {
 
       this.logger.log(`Starting leagues data refresh from web... Found ${sportsData.length} sports`);
 
-      const leaguesData = await parseLeaguesFromSports(sportsData);
+      // Limit to scrape only 5 sports per run to prevent timeouts
+      // Rotate through sports by checking which ones have fewest/oldest leagues
+      const sportLeagueCounts = await Promise.all(
+        sportsData.map(async (sport) => {
+          const count = await this.leagueRepository.count({ where: { sportName: sport.name } });
+          return { sport, count };
+        })
+      );
+
+      // Sort by count (ascending) to prioritize sports with fewer leagues
+      sportLeagueCounts.sort((a, b) => a.count - b.count);
+      const sportsToScrape = sportLeagueCounts.slice(0, 5).map(item => item.sport);
+
+      this.logger.log(`Scraping ${sportsToScrape.length} sports this run: ${sportsToScrape.map(s => s.name).join(', ')}`);
+
+      const leaguesData = await parseLeaguesFromSports(sportsToScrape);
 
       this.logger.log(`Scraped leagues data. Found ${leaguesData?.length || 0} entries`);
 
