@@ -104,16 +104,24 @@ export class LeaguesService {
         return;
       }
 
-      this.logger.log('Starting leagues data refresh from web...');
+      this.logger.log(`Starting leagues data refresh from web... Found ${sportsData.length} sports`);
+
       const leaguesData = await parseLeaguesFromSports(sportsData);
+
+      this.logger.log(`Scraped leagues data. Found ${leaguesData?.length || 0} entries`);
 
       if (leaguesData && leaguesData.length > 0) {
         let totalSaved = 0;
+        let errors = 0;
 
         // Save each league to database
         for (const entry of leaguesData) {
           // Find the sport in database to get sportId
           const sport = sportsData.find(s => s.alt === entry.sport);
+
+          if (!sport) {
+            this.logger.warn(`Sport not found for alt: ${entry.sport}`);
+          }
 
           for (const league of entry.leagues) {
             try {
@@ -131,14 +139,17 @@ export class LeaguesService {
               await this.leagueRepository.upsert(leagueData, ['url']);
               totalSaved++;
             } catch (error) {
+              errors++;
               this.logger.error(`Error saving league ${league.name}:`, error.message);
             }
           }
         }
 
         this.logger.log(
-          `Leagues data refreshed from web and saved to database. Total leagues saved: ${totalSaved}`
+          `Leagues data refresh complete. Total saved: ${totalSaved}, Errors: ${errors}`
         );
+      } else {
+        this.logger.warn('No leagues data scraped from web');
       }
     } catch (error) {
       this.logger.error('Error refreshing leagues from web:', error);
@@ -153,7 +164,7 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
         return [];
     }
 
-    //console.log(`Found ${sportsData.length} sports\n`);
+    console.log(`[parseLeaguesFromSports] Starting to parse ${sportsData.length} sports`);
 
     const browser = await puppeteer.launch({
         headless: 'new',
@@ -186,24 +197,24 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
         //  LOOP ALL SPORTS
         // ---------------------------
         for (const sport of sportsData) {
+            console.log(`[parseLeaguesFromSports] Parsing sport: ${sport.name} (${sport.alt})`);
+            console.log(`[parseLeaguesFromSports] URL: ${sport.url}`);
 
-          //  console.log(`\nParsing: ${sport.name}`);
-           // console.log(`URL: ${sport.url}`);
+            try {
+                await page.goto(sport.url, {
+                    waitUntil: 'domcontentloaded',
+                    timeout: 30000
+                });
 
-            await page.goto(sport.url, {
-                waitUntil: 'domcontentloaded',
-                timeout: 30000
-            });
+                await page.waitForSelector("main", { timeout: 30000 });
+                await delay(1000);
 
-            await page.waitForSelector("main", { timeout: 30000 });
-            await delay(1000);
+                console.log("[parseLeaguesFromSports] Page loaded. Extracting...");
 
-          //  console.log("Page loaded. Extracting...");
-
-            // ---------------------------
-            //  EXTRACT COUNTRIES & LEAGUES
-            // ---------------------------
-            const { countries, leagues } = await page.evaluate((sport) => {
+                // ---------------------------
+                //  EXTRACT COUNTRIES & LEAGUES
+                // ---------------------------
+                const { countries, leagues } = await page.evaluate((sport) => {
                 const rows = document.querySelectorAll("main div.flex");
                 const countries: Array<{ sport: any; name: string; url: string; flag: string | null }> = [];
                 const leagues: Array<Array<{ name: string; alt: string; url: string }>> = [];
@@ -246,64 +257,73 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
                 });
 
                 return { countries, leagues };
-            }, sport);
-            // ---------------------------
-            //  MATCH LEAGUES → COUNTRIES
-            // ---------------------------
-            const result: Array<{ sport: any; country: string; url: string; flag: string | null; leagues: Array<{ name: string; alt: string; url: string }> }> = [];
+                }, sport);
 
-            countries.forEach(country => {
-                const relatedLeagues: Array<{ name: string; alt: string; url: string }> = [];
+                console.log(`[parseLeaguesFromSports] Extracted ${countries.length} countries and ${leagues.length} league groups for ${sport.name}`);
 
-                leagues.forEach(list => {
-                    list.forEach(league => {
-                        if (league.url.startsWith(country.url)) {
-                            relatedLeagues.push(league);
-                        }
+                // ---------------------------
+                //  MATCH LEAGUES → COUNTRIES
+                // ---------------------------
+                const result: Array<{ sport: any; country: string; url: string; flag: string | null; leagues: Array<{ name: string; alt: string; url: string }> }> = [];
+
+                countries.forEach(country => {
+                    const relatedLeagues: Array<{ name: string; alt: string; url: string }> = [];
+
+                    leagues.forEach(list => {
+                        list.forEach(league => {
+                            if (league.url.startsWith(country.url)) {
+                                relatedLeagues.push(league);
+                            }
+                        });
+                    });
+
+                    if (relatedLeagues.length === 0) return;
+
+                    result.push({
+                        sport: country.sport,
+                        country: country.name,
+                        url: country.url,
+                        flag: country.flag,
+                        leagues: relatedLeagues
                     });
                 });
 
-                if (relatedLeagues.length === 0) return;
+                // ---------------------------
+                //  REMOVE DUPLICATES
+                // ---------------------------
+                const unique = new Map();
 
-                result.push({
-                    sport: country.sport,
-                    country: country.name,
-                    url: country.url,
-                    flag: country.flag,
-                    leagues: relatedLeagues
+                result.forEach(entry => {
+                    const key = `${entry.sport}|${entry.country}|${entry.url}`;
+
+                    if (!unique.has(key)) {
+                        unique.set(key, {
+                            ...entry,
+                            leagues: [...entry.leagues]
+                        });
+                    } else {
+                        const existing = unique.get(key);
+
+                        entry.leagues.forEach(l => {
+                            if (!existing.leagues.find(x => x.url === l.url)) {
+                                existing.leagues.push(l);
+                            }
+                        });
+                    }
                 });
-            });
 
-            // ---------------------------
-            //  REMOVE DUPLICATES
-            // ---------------------------
-            const unique = new Map();
+                const cleaned = Array.from(unique.values());
 
-            result.forEach(entry => {
-                const key = `${entry.sport}|${entry.country}|${entry.url}`;
+                console.log(`[parseLeaguesFromSports] → ${cleaned.length} countries with leagues extracted for ${sport.name}`);
 
-                if (!unique.has(key)) {
-                    unique.set(key, {
-                        ...entry,
-                        leagues: [...entry.leagues]
-                    });
-                } else {
-                    const existing = unique.get(key);
+                finalOutput.push(...cleaned);
 
-                    entry.leagues.forEach(l => {
-                        if (!existing.leagues.find(x => x.url === l.url)) {
-                            existing.leagues.push(l);
-                        }
-                    });
-                }
-            });
-
-            const cleaned = Array.from(unique.values());
-
-           // console.log(`→ ${cleaned.length} countries with leagues extracted`);
-
-            finalOutput.push(...cleaned);
+            } catch (sportError) {
+                console.error(`[parseLeaguesFromSports] Error processing sport ${sport.name}:`, sportError.message);
+            }
         }
+
+        console.log(`[parseLeaguesFromSports] Finished parsing all sports. Total output entries: ${finalOutput.length}`);
 
         // ---------------------------
         //  SAVE RESULT
