@@ -289,6 +289,7 @@ export class OddsService {
   private async scrapeLeagueOdds(leagueUrl: string): Promise<any> {
     const browserOptions = {
       headless: 'new',
+      executablePath: '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',

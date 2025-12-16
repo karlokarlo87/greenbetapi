@@ -198,6 +198,7 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
 
     const browser = await puppeteer.launch({
         headless: 'new',
+        executablePath: '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome',
         args: [
             '--no-sandbox', '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',

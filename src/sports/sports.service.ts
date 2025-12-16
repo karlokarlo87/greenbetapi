@@ -116,6 +116,7 @@ export class SportsService {
 async function parseSportsMenu() {
           const browserOptions = {
             headless: 'new',
+            executablePath: '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -202,6 +203,7 @@ async function parseSportsMenu() {
 async function parseMatchDetail(matchUrl: string) {
   const browserOptions = {
     headless: 'new',
+    executablePath: '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome',
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
