@@ -197,6 +197,54 @@ export class OddsService {
     }
   }
 
+  async getCountriesBySport(sport: string): Promise<any> {
+    if (!sport) {
+      return { message: 'Sport parameter is required', data: [] };
+    }
+
+    // Get distinct countries for the given sport
+    const countries = await this.oddRepository
+      .createQueryBuilder('odd')
+      .select('DISTINCT odd.country', 'country')
+      .where('odd.sport = :sport', { sport })
+      .andWhere('odd.country IS NOT NULL')
+      .orderBy('odd.country', 'ASC')
+      .getRawMany();
+
+    return {
+      sport: sport,
+      totalCountries: countries.length,
+      countries: countries.map(c => c.country),
+    };
+  }
+
+  async getLeaguesBySportAndCountry(sport: string, country: string): Promise<any> {
+    if (!sport || !country) {
+      return { message: 'Sport and country parameters are required', data: [] };
+    }
+
+    // Get distinct leagues for the given sport and country
+    const leagues = await this.oddRepository
+      .createQueryBuilder('odd')
+      .select('DISTINCT odd.league', 'league')
+      .addSelect('odd.leagueUrl', 'leagueUrl')
+      .where('odd.sport = :sport', { sport })
+      .andWhere('odd.country = :country', { country })
+      .andWhere('odd.league IS NOT NULL')
+      .orderBy('odd.league', 'ASC')
+      .getRawMany();
+
+    return {
+      sport: sport,
+      country: country,
+      totalLeagues: leagues.length,
+      leagues: leagues.map(l => ({
+        name: l.league,
+        url: l.leagueUrl,
+      })),
+    };
+  }
+
   private async scrapeLeagueOdds(leagueUrl: string): Promise<any> {
     const browserOptions = {
       headless: 'new',
