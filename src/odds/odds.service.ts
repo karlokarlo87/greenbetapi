@@ -202,14 +202,34 @@ export class OddsService {
       return { message: 'Sport parameter is required', data: [] };
     }
 
-    // Get distinct countries for the given sport
+    // Get distinct countries for the given sport (case-insensitive)
     const countries = await this.oddRepository
       .createQueryBuilder('odd')
       .select('DISTINCT odd.country', 'country')
-      .where('odd.sport = :sport', { sport })
+      .where('LOWER(odd.sport) = LOWER(:sport)', { sport })
       .andWhere('odd.country IS NOT NULL')
       .orderBy('odd.country', 'ASC')
       .getRawMany();
+
+    if (countries.length === 0) {
+      // Check if there's any data for this sport at all
+      const totalOdds = await this.oddRepository.count();
+      if (totalOdds === 0) {
+        return {
+          message: 'No odds data available yet. Please wait for the scraper to populate data.',
+          sport: sport,
+          totalCountries: 0,
+          countries: [],
+        };
+      }
+
+      return {
+        message: `No countries found for sport: ${sport}. Please check the sport name or wait for data to be scraped.`,
+        sport: sport,
+        totalCountries: 0,
+        countries: [],
+      };
+    }
 
     return {
       sport: sport,
@@ -223,16 +243,37 @@ export class OddsService {
       return { message: 'Sport and country parameters are required', data: [] };
     }
 
-    // Get distinct leagues for the given sport and country
+    // Get distinct leagues for the given sport and country (case-insensitive)
     const leagues = await this.oddRepository
       .createQueryBuilder('odd')
       .select('DISTINCT odd.league', 'league')
       .addSelect('odd.leagueUrl', 'leagueUrl')
-      .where('odd.sport = :sport', { sport })
-      .andWhere('odd.country = :country', { country })
+      .where('LOWER(odd.sport) = LOWER(:sport)', { sport })
+      .andWhere('LOWER(odd.country) = LOWER(:country)', { country })
       .andWhere('odd.league IS NOT NULL')
       .orderBy('odd.league', 'ASC')
       .getRawMany();
+
+    if (leagues.length === 0) {
+      const totalOdds = await this.oddRepository.count();
+      if (totalOdds === 0) {
+        return {
+          message: 'No odds data available yet. Please wait for the scraper to populate data.',
+          sport: sport,
+          country: country,
+          totalLeagues: 0,
+          leagues: [],
+        };
+      }
+
+      return {
+        message: `No leagues found for sport: ${sport}, country: ${country}. Please check the parameters or wait for data to be scraped.`,
+        sport: sport,
+        country: country,
+        totalLeagues: 0,
+        leagues: [],
+      };
+    }
 
     return {
       sport: sport,
