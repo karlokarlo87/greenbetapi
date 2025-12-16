@@ -13,18 +13,21 @@ export class LeaguesController {
   ) {}
 
   @Get()
-  async getLeagues(@Query('name') sportName?: string) {
-    if (sportName) {
-    
-
-      const data = await this.leaguesService.getLeaguesBySport(sportName);
-
-      // cache for 10 minutes
-     
-
-      return data;
+  async getLeagues(
+    @Query('sport') sport?: string,
+    @Query('country') country?: string,
+  ) {
+    // Filter by both sport and country
+    if (sport && country) {
+      return await this.leaguesService.getLeaguesBySportAndCountry(sport, country);
     }
 
+    // Filter by sport only
+    if (sport) {
+      return await this.leaguesService.getLeaguesBySport(sport);
+    }
+
+    // Return all leagues
     return this.leaguesService.getAllLeagues();
   }
 }

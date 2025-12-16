@@ -70,6 +70,59 @@ export class LeaguesService {
     return [grouped];
   }
 
+  async getLeaguesBySportAndCountry(sport: string, country: string) {
+    if (!sport || !country) {
+      return {
+        message: 'Sport and country parameters are required',
+        sport: sport,
+        country: country,
+        totalLeagues: 0,
+        leagues: [],
+      };
+    }
+
+    // Get leagues filtered by sport and country (case-insensitive)
+    const leagues = await this.leagueRepository
+      .createQueryBuilder('league')
+      .where('LOWER(league.sportName) = LOWER(:sport)', { sport })
+      .andWhere('LOWER(league.country) = LOWER(:country)', { country })
+      .orderBy('league.name', 'ASC')
+      .getMany();
+
+    if (leagues.length === 0) {
+      const totalLeagues = await this.leagueRepository.count();
+      if (totalLeagues === 0) {
+        return {
+          message: 'No leagues data available yet. Please wait for the scraper to populate data.',
+          sport: sport,
+          country: country,
+          totalLeagues: 0,
+          leagues: [],
+        };
+      }
+
+      return {
+        message: `No leagues found for sport: ${sport} and country: ${country}. Please check the parameters.`,
+        sport: sport,
+        country: country,
+        totalLeagues: 0,
+        leagues: [],
+      };
+    }
+
+    return {
+      sport: sport,
+      country: country,
+      totalLeagues: leagues.length,
+      leagues: leagues.map(l => ({
+        name: l.name,
+        url: l.url,
+        sportAlt: l.sportAlt,
+      })),
+      lastUpdated: leagues[0].updatedAt.toISOString(),
+    };
+  }
+
   async getAllLeagues() {
     // Get all leagues from database
     const leagues = await this.leagueRepository.find({
