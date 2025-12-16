@@ -15,6 +15,9 @@ export class League {
   @Column({ nullable: true })
   sportAlt: string;
 
+  @Column({ nullable: true })
+  leagueKey: string;
+
   @Column({ unique: true })
   url: string;
 

@@ -9,7 +9,7 @@ const puppeteer = require('puppeteer');
 
 export interface LeaguesBySport {
   sport: string;
-  leagues: Array<{ name: string; country: string; url: string }>;
+  leagues: Array<{ name: string; country: string; url: string; leagueKey: string }>;
   lastUpdated: string;
 }
 
@@ -63,6 +63,7 @@ export class LeaguesService {
         name: l.name,
         country: l.country,
         url: l.url,
+        leagueKey: l.leagueKey,
       })),
       lastUpdated: leagues.length > 0 ? leagues[0].updatedAt.toISOString() : new Date().toISOString(),
     };
@@ -118,6 +119,7 @@ export class LeaguesService {
         name: l.name,
         url: l.url,
         sportAlt: l.sportAlt,
+        leagueKey: l.leagueKey,
       })),
       lastUpdated: leagues[0].updatedAt.toISOString(),
     };
@@ -145,6 +147,7 @@ export class LeaguesService {
         name: league.name,
         country: league.country,
         url: league.url,
+        leagueKey: league.leagueKey,
       });
     });
 
@@ -211,12 +214,24 @@ export class LeaguesService {
           // Save leagues
           for (const league of entry.leagues) {
             try {
+              // Extract leagueKey from URL
+              // URL format: https://www.oddsportal.com/football/africa/africa-cup-of-nations/
+              // leagueKey: africa-cup-of-nations
+              let leagueKey = '';
+              try {
+                const urlParts = league.url.split('/').filter(part => part.length > 0);
+                leagueKey = urlParts[urlParts.length - 1] || '';
+              } catch (e) {
+                this.logger.warn(`Failed to extract leagueKey from URL: ${league.url}`);
+              }
+
               const leagueData: any = {
                 name: league.name,
                 country: entry.country,
                 url: league.url,
                 sportName: sport?.name || entry.sport,
                 sportAlt: sport?.alt || entry.sport,
+                leagueKey: leagueKey,
               };
 
               await this.leagueRepository.upsert(leagueData, ['sportName', 'country', 'name']);
