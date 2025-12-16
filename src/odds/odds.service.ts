@@ -35,9 +35,9 @@ export class OddsService {
     }
   }
 
-  @Cron('*/5 * * * *') // Every 5 minutes
+  @Cron('2,7,12,17,22,27,32,37,42,47,52,57 * * * *') // Every 5 minutes starting at minute 2 (2 min after sports, 1 min after leagues)
   async handleCronRefresh() {
-    this.logger.log('Running 5-minute odds data refresh from oddsportal.com...');
+    this.logger.log('[STEP 3] Running odds data refresh from oddsportal.com (after leagues scraped)...');
     await this.refreshOddsFromWeb();
   }
 
