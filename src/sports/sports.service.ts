@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import * as fs from 'fs';
-import * as path from 'path';
- 
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Sport } from './sport.entity';
+
 const puppeteer = require('puppeteer');
-export interface Sport {
+
+interface ScrapedSport {
   name: string;
   icon: string | null;
   alt: string;
@@ -16,25 +18,30 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 @Injectable()
 export class SportsService {
   private readonly logger = new Logger(SportsService.name);
-  private sportsData: Sport[] = [];
   private lastUpdated: Date;
 
-  constructor() {
+  constructor(
+    @InjectRepository(Sport)
+    private readonly sportRepository: Repository<Sport>,
+  ) {
     this.loadSportsData();
   }
 
-  private loadSportsData() {
+  private async loadSportsData() {
     try {
-      const dataPath = path.join(__dirname, 'data', 'sports.json');
-      const fileContent = fs.readFileSync(dataPath, 'utf-8');
-      this.sportsData = JSON.parse(fileContent);
+      const count = await this.sportRepository.count();
       this.lastUpdated = new Date();
       this.logger.log(
-        `Sports data loaded into cache. Total sports: ${this.sportsData.length}. Last updated: ${this.lastUpdated.toISOString()}`
+        `Sports data loaded from database. Total sports: ${count}. Last updated: ${this.lastUpdated.toISOString()}`
       );
+
+      // If no data in database, scrape and populate
+      if (count === 0) {
+        this.logger.log('No sports in database, fetching from web...');
+        await this.refreshSportsFromWeb();
+      }
     } catch (error) {
       this.logger.error('Error loading sports data:', error);
-      this.sportsData = [];
     }
   }
 
@@ -48,15 +55,23 @@ export class SportsService {
     try {
       const scrapedSports = await parseSportsMenu();
       if (scrapedSports && scrapedSports.length > 0) {
-        this.sportsData = scrapedSports;
         this.lastUpdated = new Date();
 
-        // Save to JSON file
-        const dataPath = path.join(__dirname, 'data', 'sports.json');
-        fs.writeFileSync(dataPath, JSON.stringify(scrapedSports, null, 2));
+        // Save to database (upsert based on name)
+        for (const sport of scrapedSports) {
+          await this.sportRepository.upsert(
+            {
+              name: sport.name,
+              icon: sport.icon,
+              alt: sport.alt,
+              url: sport.url,
+            },
+            ['name'], // conflict target: unique column
+          );
+        }
 
         this.logger.log(
-          `Sports data refreshed from web. Total sports: ${this.sportsData.length}. Last updated: ${this.lastUpdated.toISOString()}`
+          `Sports data refreshed from web and saved to database. Total sports: ${scrapedSports.length}. Last updated: ${this.lastUpdated.toISOString()}`
         );
       }
     } catch (error) {
@@ -65,12 +80,17 @@ export class SportsService {
   }
 
   async getAllSports() {
-      const scrapedSports = await parseSportsMenu();
-    return scrapedSports
+    // Get sports from database
+    const sports = await this.sportRepository.find({
+      order: { name: 'ASC' },
+    });
+    return sports;
   }
 
-  getCachedSportsData(): Sport[] {
-    return this.sportsData;
+  async getCachedSportsData(): Promise<Sport[]> {
+    return await this.sportRepository.find({
+      order: { name: 'ASC' },
+    });
   }
 
   async getMatchDetail(matchUrl: string) {

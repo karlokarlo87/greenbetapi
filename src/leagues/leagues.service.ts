@@ -34,24 +34,22 @@ export class LeaguesService {
     }
   }
 
- async  getLeaguesBySport(sportName: string) {
-
-    const sportsData = this.sportsService.getCachedSportsData().filter(s => s.name.toLowerCase() === sportName.toLowerCase());
-    const leaguesData = await parseLeaguesFromSports(sportsData);
+  async getLeaguesBySport(sportName: string) {
+    const sportsData = await this.sportsService.getCachedSportsData();
+    const filteredSports = sportsData.filter(s => s.name.toLowerCase() === sportName.toLowerCase());
+    const leaguesData = await parseLeaguesFromSports(filteredSports);
     return leaguesData;
- 
   }
 
   async getAllLeagues() {
-     const sportsData = this.sportsService.getCachedSportsData();
+    const sportsData = await this.sportsService.getCachedSportsData();
     const leaguesData = await parseLeaguesFromSports(sportsData);
     return leaguesData;
-  
   }
 
   async refreshLeaguesFromWeb() {
     try {
-      const sportsData = this.sportsService.getCachedSportsData();
+      const sportsData = await this.sportsService.getCachedSportsData();
       if (!sportsData || sportsData.length === 0) {
         this.logger.warn('No sports data available to fetch leagues');
         return;
