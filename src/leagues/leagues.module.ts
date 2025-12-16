@@ -17,5 +17,6 @@ import { League } from './league.entity';
   ],
   controllers: [LeaguesController],
   providers: [LeaguesService],
+  exports: [LeaguesService],
 })
 export class LeaguesModule {}
