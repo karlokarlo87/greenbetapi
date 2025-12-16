@@ -150,13 +150,13 @@ async function parseSportsMenu() {
             const firstPageUrl = `https://www.oddsportal.com/`;
           
             
-            await page.goto(firstPageUrl, { waitUntil: 'domcontentloaded', timeout: 1000 });
+            await page.goto(firstPageUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
             console.log('Page loaded, waiting for sports menu...');
-    
+
     // Wait for sports menu
-    await page.waitForSelector('nav[aria-label="Sports Menu"]', { 
-      timeout: 1000 
+    await page.waitForSelector('nav[aria-label="Sports Menu"]', {
+      timeout: 30000
     });
     
     // Give extra time for content to render
@@ -193,6 +193,7 @@ async function parseSportsMenu() {
     
   } catch (error) {
     console.error('Error:', error.message);
+    return [];
   } finally {
     await browser.close();
   }

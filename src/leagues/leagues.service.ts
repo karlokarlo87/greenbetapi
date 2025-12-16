@@ -147,10 +147,10 @@ export class LeaguesService {
 }
 
 async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: string; url: string }>) {
- 
+
     if (!sportsData || sportsData.length === 0) {
         console.error('Error: No sports data provided');
-        return;
+        return [];
     }
 
     //console.log(`Found ${sportsData.length} sports\n`);
@@ -191,11 +191,11 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
            // console.log(`URL: ${sport.url}`);
 
             await page.goto(sport.url, {
-                waitUntil: 'networkidle0',
-                timeout: 3000
+                waitUntil: 'domcontentloaded',
+                timeout: 30000
             });
 
-            await page.waitForSelector("main", { timeout: 3000 });
+            await page.waitForSelector("main", { timeout: 30000 });
             await delay(1000);
 
           //  console.log("Page loaded. Extracting...");
@@ -312,6 +312,7 @@ async function parseLeaguesFromSports(sportsData: Array<{ name: string; alt: str
 
     } catch (err) {
         console.error("Error:", err);
+        return [];
     } finally {
         await delay(3000);
         await browser.close();
