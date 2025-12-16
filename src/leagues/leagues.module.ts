@@ -4,6 +4,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { LeaguesController } from './leagues.controller';
 import { LeaguesService } from './leagues.service';
 import { SportsModule } from '../sports/sports.module';
+import { CountriesModule } from '../countries/countries.module';
 import { League } from './league.entity';
 
 @Module({
@@ -14,6 +15,7 @@ import { League } from './league.entity';
       max: 100, // maximum number of items in cache
     }),
     SportsModule,
+    CountriesModule,
   ],
   controllers: [LeaguesController],
   providers: [LeaguesService],

@@ -3,6 +3,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SportsModule } from './sports/sports.module';
+import { CountriesModule } from './countries/countries.module';
 import { LeaguesModule } from './leagues/leagues.module';
 import { OddsModule } from './odds/odds.module';
 import { LiveModule } from './live/live.module';
@@ -25,7 +26,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       }),
     }),
     ScheduleModule.forRoot(),
-    SportsModule, LeaguesModule, OddsModule, LiveModule,
+    SportsModule, CountriesModule, LeaguesModule, OddsModule, LiveModule,
     ],
   controllers: [AppController],
   providers: [AppService],

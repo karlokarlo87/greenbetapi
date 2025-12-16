@@ -1,21 +1,21 @@
 import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
-@Entity('leagues')
-@Index(['sportName', 'country', 'name'], { unique: true })
-export class League {
+@Entity('countries')
+@Index(['sportName', 'country'], { unique: true })
+export class Country {
   @PrimaryColumn()
   sportName: string;
 
   @PrimaryColumn()
   country: string;
 
-  @PrimaryColumn()
-  name: string;
-
   @Column({ nullable: true })
   sportAlt: string;
 
-  @Column({ unique: true })
+  @Column({ nullable: true })
+  flag: string;
+
+  @Column({ nullable: true })
   url: string;
 
   @CreateDateColumn()

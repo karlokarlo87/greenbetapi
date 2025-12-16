@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
 import { SportsService } from '../sports/sports.service';
+import { CountriesService } from '../countries/countries.service';
 import { League } from './league.entity';
 const puppeteer = require('puppeteer');
 
@@ -22,6 +23,7 @@ export class LeaguesService {
     @InjectRepository(League)
     private readonly leagueRepository: Repository<League>,
     private readonly sportsService: SportsService,
+    private readonly countriesService: CountriesService,
   ) {
     this.loadLeaguesData();
   }
@@ -129,15 +131,31 @@ export class LeaguesService {
         let totalSaved = 0;
         let errors = 0;
 
-        // Save each league to database
+        // Save each country and league to database
         for (const entry of leaguesData) {
-          // Find the sport in database to get sportId
+          // Find the sport in database to get sport details
           const sport = sportsData.find(s => s.alt === entry.sport);
 
           if (!sport) {
             this.logger.warn(`Sport not found for alt: ${entry.sport}`);
           }
 
+          // Save country data
+          try {
+            const countryData = {
+              sportName: sport?.name || entry.sport,
+              country: entry.country,
+              sportAlt: sport?.alt || entry.sport,
+              flag: entry.flag || undefined,
+              url: entry.url,
+            };
+
+            await this.countriesService.upsertCountry(countryData);
+          } catch (error) {
+            this.logger.error(`Error saving country ${entry.country}:`, error.message);
+          }
+
+          // Save leagues
           for (const league of entry.leagues) {
             try {
               const leagueData: any = {
@@ -145,13 +163,10 @@ export class LeaguesService {
                 country: entry.country,
                 url: league.url,
                 sportName: sport?.name || entry.sport,
+                sportAlt: sport?.alt || entry.sport,
               };
 
-              if (sport?.id) {
-                leagueData.sportId = sport.id;
-              }
-
-              await this.leagueRepository.upsert(leagueData, ['url']);
+              await this.leagueRepository.upsert(leagueData, ['sportName', 'country', 'name']);
               totalSaved++;
             } catch (error) {
               errors++;
