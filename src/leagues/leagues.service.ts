@@ -1,17 +1,14 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import * as fs from 'fs';
-import * as path from 'path';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Cron } from '@nestjs/schedule';
 import { SportsService } from '../sports/sports.service';
+import { League } from './league.entity';
 const puppeteer = require('puppeteer');
-export interface League {
-  name: string;
-  country?: string;
-  url: string;
-}
 
 export interface LeaguesBySport {
   sport: string;
-  leagues: League[];
+  leagues: Array<{ name: string; country: string; url: string }>;
   lastUpdated: string;
 }
 
@@ -20,31 +17,83 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 @Injectable()
 export class LeaguesService {
   private readonly logger = new Logger(LeaguesService.name);
-  private leaguesCache: Map<string, LeaguesBySport> = new Map();
 
-  constructor(private readonly sportsService: SportsService) {
+  constructor(
+    @InjectRepository(League)
+    private readonly leagueRepository: Repository<League>,
+    private readonly sportsService: SportsService,
+  ) {
     this.loadLeaguesData();
   }
 
-  private loadLeaguesData() {
+  private async loadLeaguesData() {
     try {
-     
+      const count = await this.leagueRepository.count();
+      this.logger.log(`Leagues data loaded from database. Total leagues: ${count}`);
+
+      // If no data in database, scrape and populate
+      if (count === 0) {
+        this.logger.log('No leagues in database, fetching from web...');
+        await this.refreshLeaguesFromWeb();
+      }
     } catch (error) {
       this.logger.error('Error loading leagues data:', error);
     }
   }
 
+  @Cron('*/5 * * * *') // Every 5 minutes
+  async handleCronRefresh() {
+    this.logger.log('Running 5-minute leagues data refresh from oddsportal.com...');
+    await this.refreshLeaguesFromWeb();
+  }
+
   async getLeaguesBySport(sportName: string) {
-    const sportsData = await this.sportsService.getCachedSportsData();
-    const filteredSports = sportsData.filter(s => s.name.toLowerCase() === sportName.toLowerCase());
-    const leaguesData = await parseLeaguesFromSports(filteredSports);
-    return leaguesData;
+    // Get leagues from database filtered by sport name
+    const leagues = await this.leagueRepository.find({
+      where: { sportName },
+      order: { country: 'ASC', name: 'ASC' },
+    });
+
+    // Group by sport
+    const grouped: LeaguesBySport = {
+      sport: sportName,
+      leagues: leagues.map(l => ({
+        name: l.name,
+        country: l.country,
+        url: l.url,
+      })),
+      lastUpdated: leagues.length > 0 ? leagues[0].updatedAt.toISOString() : new Date().toISOString(),
+    };
+
+    return [grouped];
   }
 
   async getAllLeagues() {
-    const sportsData = await this.sportsService.getCachedSportsData();
-    const leaguesData = await parseLeaguesFromSports(sportsData);
-    return leaguesData;
+    // Get all leagues from database
+    const leagues = await this.leagueRepository.find({
+      order: { sportName: 'ASC', country: 'ASC', name: 'ASC' },
+    });
+
+    // Group by sport
+    const groupedBySport: { [key: string]: LeaguesBySport } = {};
+
+    leagues.forEach(league => {
+      if (!groupedBySport[league.sportName]) {
+        groupedBySport[league.sportName] = {
+          sport: league.sportName,
+          leagues: [],
+          lastUpdated: league.updatedAt.toISOString(),
+        };
+      }
+
+      groupedBySport[league.sportName].leagues.push({
+        name: league.name,
+        country: league.country,
+        url: league.url,
+      });
+    });
+
+    return Object.values(groupedBySport);
   }
 
   async refreshLeaguesFromWeb() {
@@ -59,37 +108,37 @@ export class LeaguesService {
       const leaguesData = await parseLeaguesFromSports(sportsData);
 
       if (leaguesData && leaguesData.length > 0) {
-        // Process and cache the leagues data
-        // Group by sport
-        const groupedBySport: any = {};
+        let totalSaved = 0;
 
-        leaguesData.forEach(entry => {
-          if (!groupedBySport[entry.sport]) {
-            groupedBySport[entry.sport] = {
-              sport: entry.sport,
-              leagues: [],
-              lastUpdated: new Date().toISOString(),
-            };
+        // Save each league to database
+        for (const entry of leaguesData) {
+          // Find the sport in database to get sportId
+          const sport = sportsData.find(s => s.alt === entry.sport);
+
+          for (const league of entry.leagues) {
+            try {
+              const leagueData: any = {
+                name: league.name,
+                country: entry.country,
+                url: league.url,
+                sportName: sport?.name || entry.sport,
+              };
+
+              if (sport?.id) {
+                leagueData.sportId = sport.id;
+              }
+
+              await this.leagueRepository.upsert(leagueData, ['url']);
+              totalSaved++;
+            } catch (error) {
+              this.logger.error(`Error saving league ${league.name}:`, error.message);
+            }
           }
+        }
 
-          entry.leagues.forEach(league => {
-            groupedBySport[entry.sport].leagues.push({
-              name: league.name,
-              country: entry.country,
-              url: league.url,
-            });
-          });
-        });
-
-        // Update cache
-        Object.keys(groupedBySport).forEach(sport => {
-          this.leaguesCache.set(sport.toLowerCase(), groupedBySport[sport]);
-        });
-
-        // Save to JSON file
-  
-
-        this.logger.log(`Leagues data refreshed. Total sports: ${Object.keys(groupedBySport).length}`);
+        this.logger.log(
+          `Leagues data refreshed from web and saved to database. Total leagues saved: ${totalSaved}`
+        );
       }
     } catch (error) {
       this.logger.error('Error refreshing leagues from web:', error);

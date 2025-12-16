@@ -45,9 +45,9 @@ export class SportsService {
     }
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron('*/5 * * * *') // Every 5 minutes
   async handleCronRefresh() {
-    this.logger.log('Running hourly sports data refresh from oddsportal.com...');
+    this.logger.log('Running 5-minute sports data refresh from oddsportal.com...');
     await this.refreshSportsFromWeb();
   }
 
