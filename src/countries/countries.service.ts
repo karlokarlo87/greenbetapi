@@ -49,7 +49,6 @@ export class CountriesService {
       totalCountries: countries.length,
       countries: countries.map(c => ({
         name: c.country,
-        countryKey: this.generateCountryKey(c.country),
         flag: c.flag,
         url: c.url,
       })),
@@ -60,56 +59,6 @@ export class CountriesService {
     return await this.countryRepository.find({
       order: { sportName: 'ASC', country: 'ASC' },
     });
-  }
-
-  async getAllUniqueCountries(): Promise<any> {
-    try {
-      // Get all unique countries (aggregated across all sports)
-      const countries = await this.countryRepository
-        .createQueryBuilder('country')
-        .select('country.country', 'name')
-        .addSelect('MIN(country.flag)', 'flag')
-        .addSelect('MIN(country.url)', 'url')
-        .groupBy('country.country')
-        .orderBy('country.country', 'ASC')
-        .getRawMany();
-
-      if (countries.length === 0) {
-        return {
-          message: 'No countries data available yet. Please wait for the scraper to populate data.',
-          totalCountries: 0,
-          countries: [],
-        };
-      }
-
-      // Transform to card-friendly format similar to sports
-      return {
-        totalCountries: countries.length,
-        countries: countries.map(c => ({
-          name: c.name,
-          countryKey: this.generateCountryKey(c.name),
-          flag: c.flag,
-          url: c.url,
-        })),
-        lastUpdated: new Date().toISOString(),
-      };
-    } catch (error) {
-      this.logger.error('Error fetching unique countries:', error);
-      return {
-        message: 'Error fetching countries data',
-        totalCountries: 0,
-        countries: [],
-      };
-    }
-  }
-
-  private generateCountryKey(countryName: string): string {
-    // Convert country name to URL-friendly key
-    // Example: "United States" -> "united-states"
-    return countryName
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
   }
 
   async upsertCountry(countryData: Partial<Country>): Promise<void> {
