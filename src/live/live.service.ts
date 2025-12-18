@@ -1,24 +1,169 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { LiveMatch } from './live.entity';
+
 const puppeteer = require('puppeteer');
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 @Injectable()
 export class LiveService {
+  private readonly logger = new Logger(LiveService.name);
+  private cachedData: any = { sports: [], matches: [] };
 
-     async getLiveSports() {
-        return  parseInPlaySports();    
-     }
-     async getAllLiveSports() {
-        return  parseInPlaySports();    
-     }
-    async getLiveSport(sport: string) {
-            const data = await parseInPlaySports(); 
-            const datamatch = data.matches;
-            const result = datamatch.filter(item => item.sport.toLowerCase() === sport.toLowerCase());
-            return result;
+  constructor(
+    @InjectRepository(LiveMatch)
+    private readonly liveMatchRepository: Repository<LiveMatch>,
+  ) {
+    this.loadFromDatabase();
+  }
+
+  private async loadFromDatabase() {
+    try {
+      const matches = await this.liveMatchRepository.find();
+      this.logger.log(`Loaded ${matches.length} live matches from database`);
+
+      // Convert to the same JSON structure
+      this.cachedData = this.convertToResponseFormat(matches);
+
+      // Initial scrape if no data
+      if (matches.length === 0) {
+        this.logger.log('No live matches in database, starting initial scrape...');
+        await this.refreshLiveMatches();
+      }
+    } catch (error) {
+      this.logger.error('Error loading live matches from database:', error);
     }
+  }
 
+  @Cron('*/30 * * * * *') // Every 30 seconds
+  async handleCronRefresh() {
+    this.logger.log('Refreshing live matches from oddsportal.com...');
+    await this.deleteEndedMatches();
+    await this.refreshLiveMatches();
+  }
+
+  private async deleteEndedMatches() {
+    try {
+      // Delete all matches with status "FINISHED"
+      const result = await this.liveMatchRepository
+        .createQueryBuilder()
+        .delete()
+        .where("matchStatus = :status", { status: 'FINISHED' })
+        .execute();
+
+      if (result.affected && result.affected > 0) {
+        this.logger.log(`Deleted ${result.affected} finished matches from database`);
+      }
+    } catch (error) {
+      this.logger.error('Error deleting ended matches:', error);
+    }
+  }
+
+  private async refreshLiveMatches() {
+    try {
+      const scrapedData = await parseInPlaySports();
+
+      if (scrapedData && scrapedData.matches && scrapedData.matches.length > 0) {
+        // Save matches to database
+        let savedCount = 0;
+        let errors = 0;
+
+        for (const match of scrapedData.matches) {
+          try {
+            await this.liveMatchRepository.upsert(
+              {
+                sport: match.sport,
+                country: match.country,
+                countryFlag: match.countryFlag,
+                league: match.league,
+                homeTeam: match.homeTeam,
+                awayTeam: match.awayTeam,
+                matchTime: match.matchTime,
+                matchStatus: match.matchStatus,
+                homeTeamLogo: match.homeTeamLogo,
+                homeScore: match.homeScore,
+                awayTeamLogo: match.awayTeamLogo,
+                awayScore: match.awayScore,
+                odds: match.odds,
+                bookmakers: match.bookmakers,
+                url: match.url,
+              },
+              ['sport', 'country', 'league', 'homeTeam', 'awayTeam']
+            );
+            savedCount++;
+          } catch (error) {
+            errors++;
+            this.logger.error(`Error saving match ${match.homeTeam} vs ${match.awayTeam}:`, error.message);
+          }
+        }
+
+        this.logger.log(`Live matches refresh complete. Saved: ${savedCount}, Errors: ${errors}`);
+
+        // Update cached data
+        const matches = await this.liveMatchRepository.find();
+        this.cachedData = this.convertToResponseFormat(matches);
+      } else {
+        this.logger.warn('No live matches scraped from oddsportal.com');
+      }
+    } catch (error) {
+      this.logger.error('Error refreshing live matches:', error);
+    }
+  }
+
+  private convertToResponseFormat(matches: LiveMatch[]): any {
+    // Extract unique sports for sports array
+    const sportsMap = new Map();
+
+    matches.forEach(match => {
+      if (!sportsMap.has(match.sport)) {
+        sportsMap.set(match.sport, {
+          name: match.sport,
+          url: `https://www.oddsportal.com/inplay-odds/live-now/${match.sport.toLowerCase()}/`,
+          icon: null
+        });
+      }
+    });
+
+    const matchesArray = matches.map(m => ({
+      sport: m.sport,
+      country: m.country,
+      countryFlag: m.countryFlag,
+      league: m.league,
+      matchTime: m.matchTime,
+      matchStatus: m.matchStatus,
+      homeTeam: m.homeTeam,
+      homeTeamLogo: m.homeTeamLogo,
+      homeScore: m.homeScore,
+      awayTeam: m.awayTeam,
+      awayTeamLogo: m.awayTeamLogo,
+      awayScore: m.awayScore,
+      odds: m.odds,
+      bookmakers: m.bookmakers,
+      url: m.url,
+    }));
+
+    return {
+      sports: Array.from(sportsMap.values()),
+      matches: matchesArray,
+    };
+  }
+
+  async getLiveSports() {
+    return this.cachedData;
+  }
+
+  async getAllLiveSports() {
+    return this.cachedData;
+  }
+
+  async getLiveSport(sport: string) {
+    const datamatch = this.cachedData.matches;
+    const result = datamatch.filter(item => item.sport.toLowerCase() === sport.toLowerCase());
+    return result;
+  }
 }
 
 async function parseInPlaySports() {
