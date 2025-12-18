@@ -184,26 +184,26 @@ async function parseSportsMenu() {
         const img = li.querySelector('img');
         const sportNameDiv = li.querySelector('div[class*="text-white"]') || li.querySelector('div');
 
-        let name = null;
-        let icon = null;
-        let alt = null;
-        let url = null;
+        let name: string | null = null;
+        let icon: string | null = null;
+        let alt: string | null = null;
+        let url: string | null = null;
 
         // Try to get sport name
         if (sportNameDiv) {
-          name = sportNameDiv.textContent.trim();
+          name = sportNameDiv.textContent?.trim() || null;
         }
 
         // Try to get icon and alt from img
         if (img) {
-          icon = img.src || img.getAttribute('src');
-          alt = img.alt || img.getAttribute('alt');
+          icon = img.src || img.getAttribute('src') || null;
+          alt = img.alt || img.getAttribute('alt') || null;
         }
 
         // Try to get URL from link or construct from alt
         if (link) {
           const href = link.getAttribute('href');
-          url = href?.startsWith('http') ? href : `https://www.oddsportal.com${href}`;
+          url = href ? (href.startsWith('http') ? href : `https://www.oddsportal.com${href}`) : null;
         } else if (alt) {
           url = `https://www.oddsportal.com/${alt}/`;
         }

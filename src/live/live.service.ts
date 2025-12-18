@@ -12,6 +12,7 @@ const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 export class LiveService {
   private readonly logger = new Logger(LiveService.name);
   private cachedData: any = { sports: [], matches: [] };
+  private sportsIcons: Map<string, { name: string; url: string; icon: string | null }> = new Map();
 
   constructor(
     @InjectRepository(LiveMatch)
@@ -66,47 +67,58 @@ export class LiveService {
     try {
       const scrapedData = await parseInPlaySports();
 
-      if (scrapedData && scrapedData.matches && scrapedData.matches.length > 0) {
-        // Save matches to database
-        let savedCount = 0;
-        let errors = 0;
-
-        for (const match of scrapedData.matches) {
-          try {
-            await this.liveMatchRepository.upsert(
-              {
-                sport: match.sport,
-                country: match.country,
-                countryFlag: match.countryFlag,
-                league: match.league,
-                homeTeam: match.homeTeam,
-                awayTeam: match.awayTeam,
-                matchTime: match.matchTime,
-                matchStatus: match.matchStatus,
-                homeTeamLogo: match.homeTeamLogo,
-                homeScore: match.homeScore,
-                awayTeamLogo: match.awayTeamLogo,
-                awayScore: match.awayScore,
-                odds: match.odds,
-                bookmakers: match.bookmakers,
-                url: match.url,
-              },
-              ['sport', 'country', 'league', 'homeTeam', 'awayTeam']
-            );
-            savedCount++;
-          } catch (error) {
-            errors++;
-            this.logger.error(`Error saving match ${match.homeTeam} vs ${match.awayTeam}:`, error.message);
-          }
+      if (scrapedData) {
+        // Store sports icons
+        if (scrapedData.sports && scrapedData.sports.length > 0) {
+          this.sportsIcons.clear();
+          scrapedData.sports.forEach(sport => {
+            this.sportsIcons.set(sport.name.toLowerCase(), sport);
+          });
+          this.logger.log(`Updated ${scrapedData.sports.length} sport icons`);
         }
 
-        this.logger.log(`Live matches refresh complete. Saved: ${savedCount}, Errors: ${errors}`);
+        // Save matches to database
+        if (scrapedData.matches && scrapedData.matches.length > 0) {
+          let savedCount = 0;
+          let errors = 0;
 
-        // Update cached data
-        const matches = await this.liveMatchRepository.find();
-        this.cachedData = this.convertToResponseFormat(matches);
+          for (const match of scrapedData.matches) {
+            try {
+              await this.liveMatchRepository.upsert(
+                {
+                  sport: match.sport,
+                  country: match.country,
+                  countryFlag: match.countryFlag,
+                  league: match.league,
+                  homeTeam: match.homeTeam,
+                  awayTeam: match.awayTeam,
+                  matchTime: match.matchTime,
+                  matchStatus: match.matchStatus,
+                  homeTeamLogo: match.homeTeamLogo,
+                  homeScore: match.homeScore,
+                  awayTeamLogo: match.awayTeamLogo,
+                  awayScore: match.awayScore,
+                  odds: match.odds,
+                  bookmakers: match.bookmakers,
+                  url: match.url,
+                },
+                ['sport', 'country', 'league', 'homeTeam', 'awayTeam']
+              );
+              savedCount++;
+            } catch (error) {
+              errors++;
+              this.logger.error(`Error saving match ${match.homeTeam} vs ${match.awayTeam}:`, error.message);
+            }
+          }
+
+          this.logger.log(`Live matches refresh complete. Saved: ${savedCount}, Errors: ${errors}`);
+
+          // Update cached data
+          const matches = await this.liveMatchRepository.find();
+          this.cachedData = this.convertToResponseFormat(matches);
+        }
       } else {
-        this.logger.warn('No live matches scraped from oddsportal.com');
+        this.logger.warn('No live data scraped from oddsportal.com');
       }
     } catch (error) {
       this.logger.error('Error refreshing live matches:', error);
@@ -119,10 +131,14 @@ export class LiveService {
 
     matches.forEach(match => {
       if (!sportsMap.has(match.sport)) {
+        // Try to get icon from stored sports icons
+        const sportKey = match.sport.toLowerCase();
+        const storedSport = this.sportsIcons.get(sportKey);
+
         sportsMap.set(match.sport, {
           name: match.sport,
-          url: `https://www.oddsportal.com/inplay-odds/live-now/${match.sport.toLowerCase()}/`,
-          icon: null
+          url: storedSport?.url || `https://www.oddsportal.com/inplay-odds/live-now/${match.sport.toLowerCase()}/`,
+          icon: storedSport?.icon || null
         });
       }
     });
