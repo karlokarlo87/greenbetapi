@@ -38,7 +38,93 @@ export class OddsService {
   @Cron('2,7,12,17,22,27,32,37,42,47,52,57 * * * *') // Every 5 minutes starting at minute 2 (2 min after sports, 1 min after leagues)
   async handleCronRefresh() {
     this.logger.log('[STEP 3] Running odds data refresh from oddsportal.com (after leagues scraped)...');
+    await this.deleteOldMatches();
     await this.refreshOddsFromWeb();
+  }
+
+  private async deleteOldMatches() {
+    try {
+      // Delete matches that have already passed
+      const now = new Date();
+      const allOdds = await this.oddRepository.find();
+
+      let deletedCount = 0;
+      for (const odd of allOdds) {
+        const matchDateTime = this.parseMatchDateTime(odd.date, odd.time);
+        if (matchDateTime && matchDateTime < now) {
+          await this.oddRepository.remove(odd);
+          deletedCount++;
+        }
+      }
+
+      if (deletedCount > 0) {
+        this.logger.log(`Deleted ${deletedCount} old matches from database`);
+      }
+    } catch (error) {
+      this.logger.error('Error deleting old matches:', error);
+    }
+  }
+
+  private parseMatchDateTime(dateStr: string | null, timeStr: string | null): Date | null {
+    if (!dateStr) return null;
+
+    try {
+      const now = new Date();
+      let matchDate: Date;
+
+      // Handle special date formats
+      if (dateStr.toLowerCase() === 'today') {
+        matchDate = new Date(now);
+      } else if (dateStr.toLowerCase() === 'tomorrow') {
+        matchDate = new Date(now);
+        matchDate.setDate(matchDate.getDate() + 1);
+      } else {
+        // Try to parse date string like "21 Dec 2025" or "21 Dec"
+        const dateRegex = /(\d{1,2})\s+([A-Za-z]{3})\s*(\d{4})?/;
+        const match = dateStr.match(dateRegex);
+
+        if (match) {
+          const day = parseInt(match[1]);
+          const monthStr = match[2];
+          const year = match[3] ? parseInt(match[3]) : now.getFullYear();
+
+          // Month mapping
+          const months: { [key: string]: number } = {
+            jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+            jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+          };
+
+          const month = months[monthStr.toLowerCase()];
+          if (month !== undefined) {
+            matchDate = new Date(year, month, day);
+          } else {
+            return null;
+          }
+        } else {
+          // Try standard Date parsing as fallback
+          matchDate = new Date(dateStr);
+          if (isNaN(matchDate.getTime())) {
+            return null;
+          }
+        }
+      }
+
+      // Add time if available
+      if (timeStr) {
+        const timeRegex = /(\d{1,2}):(\d{2})/;
+        const timeMatch = timeStr.match(timeRegex);
+        if (timeMatch) {
+          matchDate.setHours(parseInt(timeMatch[1]), parseInt(timeMatch[2]), 0, 0);
+        }
+      } else {
+        // Set to end of day if no time specified
+        matchDate.setHours(23, 59, 59, 999);
+      }
+
+      return matchDate;
+    } catch (error) {
+      return null;
+    }
   }
 
   async refreshOddsFromWeb() {
@@ -93,9 +179,17 @@ export class OddsService {
           const oddsData = await this.scrapeLeagueOdds(league.url);
 
           if (oddsData && oddsData.matches && oddsData.matches.length > 0) {
-            // Save all matches to database
+            // Save only future matches to database
+            const now = new Date();
             for (const match of oddsData.matches) {
               try {
+                // Check if match is in the future
+                const matchDateTime = this.parseMatchDateTime(match.date, match.time);
+                if (matchDateTime && matchDateTime < now) {
+                  // Skip old matches
+                  continue;
+                }
+
                 const oddData: any = {
                   sport: oddsData.sport || league.sport,
                   country: oddsData.country || league.country,
@@ -135,15 +229,23 @@ export class OddsService {
   }
 
   async getAllOdds(leagueUrl?: string): Promise<any> {
+    const now = new Date();
+
     if (leagueUrl) {
       // Get odds for specific league from database
-      const odds = await this.oddRepository.find({
+      const allOdds = await this.oddRepository.find({
         where: { leagueUrl },
         order: { date: 'ASC', time: 'ASC' },
       });
 
+      // Filter only future matches
+      const odds = allOdds.filter(odd => {
+        const matchDateTime = this.parseMatchDateTime(odd.date, odd.time);
+        return matchDateTime && matchDateTime >= now;
+      });
+
       if (odds.length === 0) {
-        return { message: 'No odds found for this league', data: [] };
+        return { message: 'No upcoming matches found for this league', data: [] };
       }
 
       return {
@@ -169,8 +271,14 @@ export class OddsService {
       };
     } else {
       // Get all odds from database
-      const odds = await this.oddRepository.find({
+      const allOdds = await this.oddRepository.find({
         order: { sport: 'ASC', league: 'ASC', date: 'ASC', time: 'ASC' },
+      });
+
+      // Filter only future matches
+      const odds = allOdds.filter(odd => {
+        const matchDateTime = this.parseMatchDateTime(odd.date, odd.time);
+        return matchDateTime && matchDateTime >= now;
       });
 
       return {
