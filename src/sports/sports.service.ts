@@ -58,7 +58,10 @@ export class SportsService {
         this.lastUpdated = new Date();
 
         // Save to database (upsert based on name)
+        let withIcons = 0;
         for (const sport of scrapedSports) {
+          if (sport.icon) withIcons++;
+
           await this.sportRepository.upsert(
             {
               name: sport.name,
@@ -71,7 +74,7 @@ export class SportsService {
         }
 
         this.logger.log(
-          `Sports data refreshed from web and saved to database. Total sports: ${scrapedSports.length}. Last updated: ${this.lastUpdated.toISOString()}`
+          `Sports data refreshed from web and saved to database. Total sports: ${scrapedSports.length}, with icons: ${withIcons}. Last updated: ${this.lastUpdated.toISOString()}`
         );
       }
     } catch (error) {
@@ -175,30 +178,54 @@ async function parseSportsMenu() {
     // Parse all sports from ul > li
     const sports = await page.evaluate(() => {
       const menuItems = document.querySelectorAll('nav[aria-label="Sports Menu"] ul li');
-      
+
       return Array.from(menuItems).map(li => {
+        const link = li.querySelector('a');
         const img = li.querySelector('img');
-        const sportName = li.querySelector('div[class*="text-white"]');
-        const alt = img ? img.alt : null;
-        
+        const sportNameDiv = li.querySelector('div[class*="text-white"]') || li.querySelector('div');
+
+        let name = null;
+        let icon = null;
+        let alt = null;
+        let url = null;
+
+        // Try to get sport name
+        if (sportNameDiv) {
+          name = sportNameDiv.textContent.trim();
+        }
+
+        // Try to get icon and alt from img
+        if (img) {
+          icon = img.src || img.getAttribute('src');
+          alt = img.alt || img.getAttribute('alt');
+        }
+
+        // Try to get URL from link or construct from alt
+        if (link) {
+          const href = link.getAttribute('href');
+          url = href?.startsWith('http') ? href : `https://www.oddsportal.com${href}`;
+        } else if (alt) {
+          url = `https://www.oddsportal.com/${alt}/`;
+        }
+
         return {
-          name: sportName ? sportName.textContent.trim() : null,
-          icon: img ? img.src : null,
+          name: name,
+          icon: icon,
           alt: alt,
-          url: alt ? `https://www.oddsportal.com/${alt}/` : null
+          url: url
         };
       }).filter(sport => sport.name);
     });
     
-    
+
     if (sports.length === 0) {
       console.log('No sports found, check selectors');
       return [];
     } else {
+      // Log how many have icons
+      const withIcons = sports.filter(s => s.icon).length;
+      console.log(`✓ Found ${sports.length} sports, ${withIcons} with icons`);
       return sports;
-      // Save to JSON file
-     // fs.writeFileSync('sports.json', JSON.stringify(sports, null, 2));
-      console.log(`✓ Successfully saved ${sports.length} sports to sports.json`);
     }
     
   } catch (error) {
