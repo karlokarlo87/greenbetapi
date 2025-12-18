@@ -33,13 +33,13 @@ export class User {
   password: string;
 
   @Column({ nullable: true })
-  refreshToken: string;
+  refreshToken: string | null;
 
   @Column({ nullable: true })
-  resetPasswordToken: string;
+  resetPasswordToken: string | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  resetPasswordExpires: Date;
+  resetPasswordExpires: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;
