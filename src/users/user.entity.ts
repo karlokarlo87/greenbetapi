@@ -32,6 +32,9 @@ export class User {
   @Column()
   password: string;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  balance: number;
+
   @Column({ type: 'text', nullable: true })
   refreshToken: string | null;
 
