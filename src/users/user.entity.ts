@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index, OneToOne } from 'typeorm';
+import { Balance } from './balance.entity';
 
 @Entity('users')
 export class User {
@@ -32,8 +33,8 @@ export class User {
   @Column()
   password: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  balance: number;
+  @OneToOne(() => Balance, balance => balance.user)
+  balance: Balance;
 
   @Column({ type: 'text', nullable: true })
   refreshToken: string | null;

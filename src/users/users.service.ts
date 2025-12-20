@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, BadRequestException, Logger } from '
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { User } from './user.entity';
+import { Balance } from './balance.entity';
 import { Transaction, TransactionType, TransactionStatus } from './transaction.entity';
 import { Ticket, TicketStatus, BetType } from './ticket.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -16,6 +17,8 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Balance)
+    private readonly balanceRepository: Repository<Balance>,
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
     @InjectRepository(Ticket)
@@ -26,6 +29,7 @@ export class UsersService {
   async getProfile(userId: string) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
+      relations: ['balance'],
     });
 
     if (!user) {
@@ -35,13 +39,18 @@ export class UsersService {
     // Return user without sensitive fields
     const { password, refreshToken, resetPasswordToken, resetPasswordExpires, ...userProfile } = user;
     return {
-      user: userProfile,
+      user: {
+        ...userProfile,
+        balance: user.balance?.amount || 0,
+        currency: user.balance?.currency || 'GEL',
+      },
     };
   }
 
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
+      relations: ['balance'],
     });
 
     if (!user) {
@@ -74,7 +83,11 @@ export class UsersService {
     const { password, refreshToken, resetPasswordToken, resetPasswordExpires, ...userProfile } = user;
     return {
       message: 'Profile updated successfully',
-      user: userProfile,
+      user: {
+        ...userProfile,
+        balance: user.balance?.amount || 0,
+        currency: user.balance?.currency || 'GEL',
+      },
     };
   }
 
@@ -92,13 +105,27 @@ export class UsersService {
         throw new UnauthorizedException('User not found');
       }
 
-      const balanceBefore = Number(user.balance);
+      // Get or create balance for user
+      let balance = await queryRunner.manager.findOne(Balance, {
+        where: { userId: user.id },
+      });
+
+      if (!balance) {
+        balance = queryRunner.manager.create(Balance, {
+          userId: user.id,
+          amount: 0,
+          currency: 'GEL',
+        });
+        await queryRunner.manager.save(balance);
+      }
+
+      const balanceBefore = Number(balance.amount);
       const amount = Number(depositDto.amount);
       const balanceAfter = balanceBefore + amount;
 
-      // Update user balance
-      user.balance = balanceAfter;
-      await queryRunner.manager.save(user);
+      // Update balance
+      balance.amount = balanceAfter;
+      await queryRunner.manager.save(balance);
 
       // Create transaction record
       const transaction = queryRunner.manager.create(Transaction, {
@@ -123,6 +150,7 @@ export class UsersService {
           username: user.username,
           email: user.email,
           balance: balanceAfter,
+          currency: balance.currency,
         },
         transaction: {
           id: transaction.id,
@@ -156,7 +184,21 @@ export class UsersService {
         throw new UnauthorizedException('User not found');
       }
 
-      const balanceBefore = Number(user.balance);
+      // Get or create balance for user
+      let balance = await queryRunner.manager.findOne(Balance, {
+        where: { userId: user.id },
+      });
+
+      if (!balance) {
+        balance = queryRunner.manager.create(Balance, {
+          userId: user.id,
+          amount: 0,
+          currency: 'GEL',
+        });
+        await queryRunner.manager.save(balance);
+      }
+
+      const balanceBefore = Number(balance.amount);
       const amount = Number(withdrawDto.amount);
 
       if (balanceBefore < amount) {
@@ -165,9 +207,9 @@ export class UsersService {
 
       const balanceAfter = balanceBefore - amount;
 
-      // Update user balance
-      user.balance = balanceAfter;
-      await queryRunner.manager.save(user);
+      // Update balance
+      balance.amount = balanceAfter;
+      await queryRunner.manager.save(balance);
 
       // Create transaction record
       const transaction = queryRunner.manager.create(Transaction, {
@@ -192,6 +234,7 @@ export class UsersService {
           username: user.username,
           email: user.email,
           balance: balanceAfter,
+          currency: balance.currency,
         },
         transaction: {
           id: transaction.id,
@@ -228,7 +271,21 @@ export class UsersService {
         throw new UnauthorizedException('User not found');
       }
 
-      const balanceBefore = Number(user.balance);
+      // Get or create balance for user
+      let balance = await queryRunner.manager.findOne(Balance, {
+        where: { userId: user.id },
+      });
+
+      if (!balance) {
+        balance = queryRunner.manager.create(Balance, {
+          userId: user.id,
+          amount: 0,
+          currency: 'GEL',
+        });
+        await queryRunner.manager.save(balance);
+      }
+
+      const balanceBefore = Number(balance.amount);
       const stake = Number(placeBetDto.stake);
 
       if (balanceBefore < stake) {
@@ -239,10 +296,10 @@ export class UsersService {
       const totalOdds = placeBetDto.selections.reduce((acc, sel) => acc * Number(sel.odds), 1);
       const potentialWin = stake * totalOdds;
 
-      // Update user balance
+      // Update balance
       const balanceAfter = balanceBefore - stake;
-      user.balance = balanceAfter;
-      await queryRunner.manager.save(user);
+      balance.amount = balanceAfter;
+      await queryRunner.manager.save(balance);
 
       // Create ticket
       const ticket = queryRunner.manager.create(Ticket, {
@@ -281,6 +338,7 @@ export class UsersService {
           username: user.username,
           email: user.email,
           balance: balanceAfter,
+          currency: balance.currency,
         },
         ticket: {
           id: ticket.id,
@@ -374,25 +432,34 @@ export class UsersService {
 
   async initializeBalances(initialBalance: number = 0) {
     try {
-      // Get all users where balance is null or undefined
+      // Get all users
       const users = await this.userRepository.find();
 
-      let updatedCount = 0;
+      let createdCount = 0;
 
       for (const user of users) {
-        if (user.balance === null || user.balance === undefined) {
-          user.balance = initialBalance;
-          await this.userRepository.save(user);
-          updatedCount++;
+        // Check if balance already exists for this user
+        const existingBalance = await this.balanceRepository.findOne({
+          where: { userId: user.id },
+        });
+
+        if (!existingBalance) {
+          const balance = this.balanceRepository.create({
+            userId: user.id,
+            amount: initialBalance,
+            currency: 'GEL',
+          });
+          await this.balanceRepository.save(balance);
+          createdCount++;
         }
       }
 
-      this.logger.log(`Initialized balance for ${updatedCount} users with initial balance: ${initialBalance}`);
+      this.logger.log(`Created balance records for ${createdCount} users with initial balance: ${initialBalance}`);
 
       return {
         message: 'Balance initialization completed',
         totalUsers: users.length,
-        updatedUsers: updatedCount,
+        createdBalances: createdCount,
         initialBalance: initialBalance,
       };
     } catch (error) {
@@ -404,7 +471,8 @@ export class UsersService {
   async getAllUsersWithBalance() {
     try {
       const users = await this.userRepository.find({
-        select: ['id', 'username', 'email', 'name', 'lastname', 'balance', 'createdAt'],
+        select: ['id', 'username', 'email', 'name', 'lastname', 'createdAt'],
+        relations: ['balance'],
       });
 
       return {
@@ -415,7 +483,8 @@ export class UsersService {
           email: u.email,
           name: u.name,
           lastname: u.lastname,
-          balance: u.balance,
+          balance: u.balance?.amount || 0,
+          currency: u.balance?.currency || 'GEL',
           createdAt: u.createdAt,
         })),
       };

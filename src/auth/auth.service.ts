@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User } from '../users/user.entity';
+import { Balance } from '../users/balance.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RequestPasswordResetDto, ResetPasswordDto } from './dto/reset-password.dto';
@@ -16,6 +17,8 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Balance)
+    private readonly balanceRepository: Repository<Balance>,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -62,6 +65,14 @@ export class AuthService {
     });
 
     await this.userRepository.save(user);
+
+    // Create initial balance for the user
+    const balance = this.balanceRepository.create({
+      userId: user.id,
+      amount: 0,
+      currency: 'GEL',
+    });
+    await this.balanceRepository.save(balance);
 
     this.logger.log(`User registered successfully: ${user.username}`);
 
