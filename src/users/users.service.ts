@@ -118,10 +118,17 @@ export class UsersService {
 
       return {
         message: 'Deposit successful',
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          balance: balanceAfter,
+        },
         transaction: {
           id: transaction.id,
           type: transaction.type,
           amount: transaction.amount,
+          balanceBefore: transaction.balanceBefore,
           balanceAfter: transaction.balanceAfter,
           createdAt: transaction.createdAt,
         },
@@ -180,10 +187,17 @@ export class UsersService {
 
       return {
         message: 'Withdraw successful',
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          balance: balanceAfter,
+        },
         transaction: {
           id: transaction.id,
           type: transaction.type,
           amount: transaction.amount,
+          balanceBefore: transaction.balanceBefore,
           balanceAfter: transaction.balanceAfter,
           createdAt: transaction.createdAt,
         },
@@ -262,6 +276,12 @@ export class UsersService {
 
       return {
         message: 'Bet placed successfully',
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          balance: balanceAfter,
+        },
         ticket: {
           id: ticket.id,
           betType: ticket.betType,
@@ -272,7 +292,6 @@ export class UsersService {
           selections: ticket.selections,
           createdAt: ticket.createdAt,
         },
-        balanceAfter: balanceAfter,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
