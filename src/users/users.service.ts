@@ -352,4 +352,57 @@ export class UsersService {
       })),
     };
   }
+
+  async initializeBalances(initialBalance: number = 0) {
+    try {
+      // Get all users where balance is null or undefined
+      const users = await this.userRepository.find();
+
+      let updatedCount = 0;
+
+      for (const user of users) {
+        if (user.balance === null || user.balance === undefined) {
+          user.balance = initialBalance;
+          await this.userRepository.save(user);
+          updatedCount++;
+        }
+      }
+
+      this.logger.log(`Initialized balance for ${updatedCount} users with initial balance: ${initialBalance}`);
+
+      return {
+        message: 'Balance initialization completed',
+        totalUsers: users.length,
+        updatedUsers: updatedCount,
+        initialBalance: initialBalance,
+      };
+    } catch (error) {
+      this.logger.error('Failed to initialize balances:', error);
+      throw new BadRequestException('Failed to initialize balances');
+    }
+  }
+
+  async getAllUsersWithBalance() {
+    try {
+      const users = await this.userRepository.find({
+        select: ['id', 'username', 'email', 'name', 'lastname', 'balance', 'createdAt'],
+      });
+
+      return {
+        total: users.length,
+        users: users.map(u => ({
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          name: u.name,
+          lastname: u.lastname,
+          balance: u.balance,
+          createdAt: u.createdAt,
+        })),
+      };
+    } catch (error) {
+      this.logger.error('Failed to get users with balance:', error);
+      throw new BadRequestException('Failed to get users with balance');
+    }
+  }
 }

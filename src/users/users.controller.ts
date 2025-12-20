@@ -4,6 +4,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { DepositDto } from './dto/deposit.dto';
 import { WithdrawDto } from './dto/withdraw.dto';
 import { PlaceBetDto } from './dto/place-bet.dto';
+import { InitializeBalancesDto } from './dto/initialize-balances.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('users')
@@ -66,5 +67,16 @@ export class UsersController {
       limit ? Number(limit) : 50,
       offset ? Number(offset) : 0,
     );
+  }
+
+  @Post('admin/initialize-balances')
+  async initializeBalances(@Body() initializeBalancesDto: InitializeBalancesDto) {
+    const initialBalance = initializeBalancesDto.initialBalance ?? 0;
+    return await this.usersService.initializeBalances(initialBalance);
+  }
+
+  @Get('admin/all-balances')
+  async getAllUsersWithBalance() {
+    return await this.usersService.getAllUsersWithBalance();
   }
 }
