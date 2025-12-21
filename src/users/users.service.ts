@@ -47,6 +47,42 @@ export class UsersService {
     };
   }
 
+  async getBalance(userId: string) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['balance'],
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Get or create balance if not exists
+    let balance = user.balance;
+    if (!balance) {
+      balance = await this.balanceRepository.findOne({
+        where: { userId: user.id },
+      });
+
+      if (!balance) {
+        balance = this.balanceRepository.create({
+          userId: user.id,
+          amount: 0,
+          currency: 'GEL',
+        });
+        await this.balanceRepository.save(balance);
+      }
+    }
+
+    return {
+      userId: user.id,
+      username: user.username,
+      balance: balance.amount,
+      currency: balance.currency,
+      lastUpdated: balance.updatedAt,
+    };
+  }
+
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto) {
     const user = await this.userRepository.findOne({
       where: { id: userId },

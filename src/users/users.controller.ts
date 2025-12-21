@@ -18,6 +18,15 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('balance')
+  async getBalance(@Request() req) {
+    if (!req.user || !req.user.userId) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+    return await this.usersService.getBalance(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Patch('profile')
   async updateProfile(@Request() req, @Body() updateProfileDto: UpdateProfileDto) {
     return await this.usersService.updateProfile(req.user.userId, updateProfileDto);
