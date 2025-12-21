@@ -48,15 +48,21 @@ export class LiveService {
 
   private async deleteEndedMatches() {
     try {
-      // Delete all matches with status "FINISHED"
+      const now = new Date();
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000); // 2 hours ago
+
+      // Delete matches that are:
+      // 1. Status is FINISHED
+      // 2. Not updated in the last 2 hours (likely stale/ended)
       const result = await this.liveMatchRepository
         .createQueryBuilder()
         .delete()
         .where("matchStatus = :status", { status: 'FINISHED' })
+        .orWhere("updatedAt < :twoHoursAgo", { twoHoursAgo })
         .execute();
 
       if (result.affected && result.affected > 0) {
-        this.logger.log(`Deleted ${result.affected} finished matches from database`);
+        this.logger.log(`Deleted ${result.affected} finished/old matches from live database`);
       }
     } catch (error) {
       this.logger.error('Error deleting ended matches:', error);
