@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Post, UseGuards, Request, Body, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Post, UseGuards, Request, Body, Query, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { DepositDto } from './dto/deposit.dto';
@@ -62,6 +62,10 @@ export class UsersController {
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ) {
+    if (!req.user || !req.user.userId) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+
     return await this.usersService.getBetHistory(
       req.user.userId,
       limit ? Number(limit) : 50,
