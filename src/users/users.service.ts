@@ -58,7 +58,7 @@ export class UsersService {
     }
 
     // Get or create balance if not exists
-    let balance = user.balance;
+    let balance: Balance | null = user.balance;
     if (!balance) {
       balance = await this.balanceRepository.findOne({
         where: { userId: user.id },
