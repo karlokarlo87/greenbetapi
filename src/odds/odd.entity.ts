@@ -24,6 +24,10 @@ export class Odd {
   @Column({ nullable: true })
   time: string;
 
+  @Column({ type: 'timestamp', nullable: true })
+  @Index()
+  startTime: Date;
+
   @Column()
   homeTeam: string;
 

@@ -44,21 +44,19 @@ export class OddsService {
 
   private async deleteOldMatches() {
     try {
-      // Delete matches that have already passed
+      // Delete matches that have already passed using startTime field
       const now = new Date();
-      const allOdds = await this.oddRepository.find();
 
-      let deletedCount = 0;
-      for (const odd of allOdds) {
-        const matchDateTime = this.parseMatchDateTime(odd.date, odd.time);
-        if (matchDateTime && matchDateTime < now) {
-          await this.oddRepository.remove(odd);
-          deletedCount++;
-        }
-      }
+      const result = await this.oddRepository
+        .createQueryBuilder()
+        .delete()
+        .from(Odd)
+        .where('startTime < :now', { now })
+        .andWhere('startTime IS NOT NULL')
+        .execute();
 
-      if (deletedCount > 0) {
-        this.logger.log(`Deleted ${deletedCount} old matches from database`);
+      if (result.affected && result.affected > 0) {
+        this.logger.log(`Deleted ${result.affected} old matches from odds database`);
       }
     } catch (error) {
       this.logger.error('Error deleting old matches:', error);
@@ -197,6 +195,7 @@ export class OddsService {
                   leagueUrl: league.url,
                   date: match.date,
                   time: match.time,
+                  startTime: matchDateTime, // Add parsed start time
                   homeTeam: match.homeTeam,
                   homeTeamLogo: match.homeTeamLogo,
                   awayTeam: match.awayTeam,
@@ -232,17 +231,15 @@ export class OddsService {
     const now = new Date();
 
     if (leagueUrl) {
-      // Get odds for specific league from database
-      const allOdds = await this.oddRepository.find({
-        where: { leagueUrl },
-        order: { date: 'ASC', time: 'ASC' },
-      });
-
-      // Filter only future matches
-      const odds = allOdds.filter(odd => {
-        const matchDateTime = this.parseMatchDateTime(odd.date, odd.time);
-        return matchDateTime && matchDateTime >= now;
-      });
+      // Get odds for specific league from database, only future matches
+      const odds = await this.oddRepository
+        .createQueryBuilder('odd')
+        .where('odd.leagueUrl = :leagueUrl', { leagueUrl })
+        .andWhere('(odd.startTime >= :now OR odd.startTime IS NULL)', { now })
+        .orderBy('odd.startTime', 'ASC')
+        .addOrderBy('odd.date', 'ASC')
+        .addOrderBy('odd.time', 'ASC')
+        .getMany();
 
       if (odds.length === 0) {
         return { message: 'No upcoming matches found for this league', data: [] };
@@ -256,6 +253,7 @@ export class OddsService {
         matches: odds.map(odd => ({
           date: odd.date,
           time: odd.time,
+          startTime: odd.startTime,
           homeTeam: odd.homeTeam,
           homeTeamLogo: odd.homeTeamLogo,
           awayTeam: odd.awayTeam,
@@ -270,16 +268,16 @@ export class OddsService {
         })),
       };
     } else {
-      // Get all odds from database
-      const allOdds = await this.oddRepository.find({
-        order: { sport: 'ASC', league: 'ASC', date: 'ASC', time: 'ASC' },
-      });
-
-      // Filter only future matches
-      const odds = allOdds.filter(odd => {
-        const matchDateTime = this.parseMatchDateTime(odd.date, odd.time);
-        return matchDateTime && matchDateTime >= now;
-      });
+      // Get all odds from database, only future matches
+      const odds = await this.oddRepository
+        .createQueryBuilder('odd')
+        .where('odd.startTime >= :now OR odd.startTime IS NULL', { now })
+        .orderBy('odd.sport', 'ASC')
+        .addOrderBy('odd.league', 'ASC')
+        .addOrderBy('odd.startTime', 'ASC')
+        .addOrderBy('odd.date', 'ASC')
+        .addOrderBy('odd.time', 'ASC')
+        .getMany();
 
       return {
         totalMatches: odds.length,
@@ -289,6 +287,7 @@ export class OddsService {
           league: odd.league,
           date: odd.date,
           time: odd.time,
+          startTime: odd.startTime,
           homeTeam: odd.homeTeam,
           homeTeamLogo: odd.homeTeamLogo,
           awayTeam: odd.awayTeam,
