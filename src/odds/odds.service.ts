@@ -557,17 +557,16 @@ export class OddsService {
       await browser.close();
     }
   }
-
   async scrapeMatchOdds(baseMatchUrl: string): Promise<any> {
     this.logger.log(`Scraping match odds for: ${baseMatchUrl}`);
 
     // Define betting markets to scrape
     const markets = [
-      { name: '1X2', hash: '#1X2;1', type: 'home-draw-away' },
-      { name: 'Home/Away', hash: '#home-away;1', type: 'home-away' },
-      { name: 'Over/Under', hash: '#over-under;2', type: 'over-under' },
-      { name: 'Asian Handicap', hash: '#ah;1', type: 'asian-handicap' },
-      { name: 'Draw No Bet', hash: '#dnb;2', type: 'draw-no-bet' },
+      { name: '1X2', hash: '#1X2;2', type: 'home-draw-away' },
+      // { name: 'Home/Away', hash: '#home-away;1', type: 'home-away' },
+       { name: 'Over/Under', hash: '#over-under;2', type: 'over-under' },
+      // { name: 'Asian Handicap', hash: '#ah;1', type: 'asian-handicap' },
+      // { name: 'Draw No Bet', hash: '#dnb;2', type: 'draw-no-bet' },
     ];
 
     const fs = require('fs');
@@ -617,98 +616,59 @@ export class OddsService {
       for (const market of markets) {
         try {
           const fullUrl = baseMatchUrl + market.hash;
-          this.logger.log(`Scraping ${market.name} odds from: ${fullUrl}`);
+        
 
           await page.goto(fullUrl, {
             waitUntil: 'domcontentloaded',
             timeout: 30000
           });
 
-          await page.waitForSelector('main', { timeout: 30000 });
-          await delay(2000); // Wait for odds to load
+        
+await page.waitForSelector('[data-testid="over-under-expanded-row"]', { timeout: 900000 });
+          await delay(5000); // Wait for odds to load
 
-          const marketData = await page.evaluate((marketName, marketType) => {
-            const result: any = {
-              marketName: marketName,
-              marketType: marketType,
-              odds: [],
-            };
+const marketData = await page.evaluate(() => {
+  const rows = document.querySelectorAll(
+    '[data-testid="over-under-expanded-row"]'
+  );
 
-            // Get match info if not already collected
-            if (!result.matchInfo) {
-              const breadcrumb = document.querySelector('[data-testid="sport-country-league-item"]');
-              if (breadcrumb) {
-                const sportEl = breadcrumb.querySelector('[data-testid="header-sport-item"]');
-                const countryEl = breadcrumb.querySelector('[data-testid="header-country-item"] p');
-                const leagueEl = breadcrumb.querySelector('[data-testid="header-tournament-item"]');
+  const odds: any[] = [];
 
-                result.matchInfo = {
-                  sport: sportEl ? sportEl.textContent?.trim() : null,
-                  country: countryEl ? countryEl.textContent?.trim() : null,
-                  league: leagueEl ? leagueEl.textContent?.trim() : null,
-                };
-              }
+  rows.forEach(row => {
+    // Market title (OU +0.5, AH -1.5, etc.)
+ 
+    // Odds values
+    const values = Array.from(
+      row.querySelectorAll('[data-testid="odd-container"] a')
+    )
+      .map(el => el.textContent?.trim())
+      .filter(v => v && !isNaN(Number(v)));
+console.log("values");
+console.log(values);
+    if (values.length === 0) return;
 
-              // Get teams
-              const participantsEl = document.querySelector('[data-testid="event-header-participants"]');
-              if (participantsEl) {
-                const teamLinks = participantsEl.querySelectorAll('a[title]');
-                if (teamLinks.length >= 2) {
-                  result.matchInfo.homeTeam = teamLinks[0].getAttribute('title');
-                  result.matchInfo.awayTeam = teamLinks[1].getAttribute('title');
-                }
-              }
+    odds.push({
+      
+      odds: values
+    });
+  });
 
-              // Get match date/time
-              const dateTimeEl = document.querySelector('[data-testid="event-header-start-time"]');
-              if (dateTimeEl) {
-                result.matchInfo.startTime = dateTimeEl.textContent?.trim();
-              }
-            }
-
-            // Get odds rows
-            const oddsRows = document.querySelectorAll('[data-testid^="odd-row-"]');
-
-            oddsRows.forEach((row) => {
-              const bookmakerEl = row.querySelector('[data-testid="odd-row-bookmaker"] p');
-              const bookmakerName = bookmakerEl ? bookmakerEl.textContent?.trim() : null;
-
-              // Get all odd values in this row
-              const oddElements = row.querySelectorAll('[data-testid^="odd-value-"]');
-              const oddValues: any[] = [];
-
-              oddElements.forEach((oddEl) => {
-                const value = oddEl.textContent?.trim();
-                if (value) {
-                  oddValues.push(value);
-                }
-              });
-
-              if (bookmakerName && oddValues.length > 0) {
-                result.odds.push({
-                  bookmaker: bookmakerName,
-                  values: oddValues,
-                });
-              }
-            });
-
-            return result;
-          }, market.name, market.type);
-
+  return odds;
+});
+console.log("marketData");
+console.log(marketData);
           // Store match info from first market
-          if (!matchData.matchInfo && marketData.matchInfo) {
-            matchData.matchInfo = marketData.matchInfo;
-          }
+         
 
           // Store market odds
           matchData.markets[market.type] = {
             name: market.name,
-            odds: marketData.odds,
+            odds: marketData[0].odds ,
           };
 
-          this.logger.log(`Scraped ${marketData.odds.length} bookmakers for ${market.name}`);
+         
         } catch (error) {
-          this.logger.error(`Error scraping ${market.name}:`, error.message);
+          
           matchData.markets[market.type] = {
             name: market.name,
             error: error.message,
