@@ -19,4 +19,12 @@ export class OddsController {
   async getLeagues(@Query('sport') sport: string, @Query('country') country: string) {
     return await this.oddsService.getLeaguesBySportAndCountry(sport, country);
   }
+
+  @Get('match')
+  async getMatchOdds(@Query('url') matchUrl: string) {
+    if (!matchUrl) {
+      return { error: 'Match URL is required', message: 'Please provide a match URL parameter' };
+    }
+    return await this.oddsService.scrapeMatchOdds(matchUrl);
+  }
 }

@@ -557,4 +557,180 @@ export class OddsService {
       await browser.close();
     }
   }
+
+  async scrapeMatchOdds(baseMatchUrl: string): Promise<any> {
+    this.logger.log(`Scraping match odds for: ${baseMatchUrl}`);
+
+    // Define betting markets to scrape
+    const markets = [
+      { name: '1X2', hash: '#1X2;1', type: 'home-draw-away' },
+      { name: 'Home/Away', hash: '#home-away;1', type: 'home-away' },
+      { name: 'Over/Under', hash: '#over-under;2', type: 'over-under' },
+      { name: 'Asian Handicap', hash: '#ah;1', type: 'asian-handicap' },
+      { name: 'Draw No Bet', hash: '#dnb;2', type: 'draw-no-bet' },
+    ];
+
+    const fs = require('fs');
+    const linuxChromePath = '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome';
+    const hasLinuxChrome = fs.existsSync(linuxChromePath);
+
+    const browserOptions: any = {
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--flag-switches-begin --disable-site-isolation-trials --flag-switches-end'
+      ],
+      ignoreDefaultArgs: ['--enable-automation'],
+      ignoreHTTPSErrors: false
+    };
+
+    if (hasLinuxChrome) {
+      browserOptions.executablePath = linuxChromePath;
+    }
+
+    const browser = await puppeteer.launch(browserOptions);
+
+    try {
+      const matchData: any = {
+        url: baseMatchUrl,
+        matchInfo: null,
+        markets: {},
+      };
+
+      const page = await browser.newPage();
+      await page.setViewport({ width: 1920, height: 1080 });
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36');
+
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+      });
+
+      // Scrape each market
+      for (const market of markets) {
+        try {
+          const fullUrl = baseMatchUrl + market.hash;
+          this.logger.log(`Scraping ${market.name} odds from: ${fullUrl}`);
+
+          await page.goto(fullUrl, {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+          });
+
+          await page.waitForSelector('main', { timeout: 30000 });
+          await delay(2000); // Wait for odds to load
+
+          const marketData = await page.evaluate((marketName, marketType) => {
+            const result: any = {
+              marketName: marketName,
+              marketType: marketType,
+              odds: [],
+            };
+
+            // Get match info if not already collected
+            if (!result.matchInfo) {
+              const breadcrumb = document.querySelector('[data-testid="sport-country-league-item"]');
+              if (breadcrumb) {
+                const sportEl = breadcrumb.querySelector('[data-testid="header-sport-item"]');
+                const countryEl = breadcrumb.querySelector('[data-testid="header-country-item"] p');
+                const leagueEl = breadcrumb.querySelector('[data-testid="header-tournament-item"]');
+
+                result.matchInfo = {
+                  sport: sportEl ? sportEl.textContent?.trim() : null,
+                  country: countryEl ? countryEl.textContent?.trim() : null,
+                  league: leagueEl ? leagueEl.textContent?.trim() : null,
+                };
+              }
+
+              // Get teams
+              const participantsEl = document.querySelector('[data-testid="event-header-participants"]');
+              if (participantsEl) {
+                const teamLinks = participantsEl.querySelectorAll('a[title]');
+                if (teamLinks.length >= 2) {
+                  result.matchInfo.homeTeam = teamLinks[0].getAttribute('title');
+                  result.matchInfo.awayTeam = teamLinks[1].getAttribute('title');
+                }
+              }
+
+              // Get match date/time
+              const dateTimeEl = document.querySelector('[data-testid="event-header-start-time"]');
+              if (dateTimeEl) {
+                result.matchInfo.startTime = dateTimeEl.textContent?.trim();
+              }
+            }
+
+            // Get odds rows
+            const oddsRows = document.querySelectorAll('[data-testid^="odd-row-"]');
+
+            oddsRows.forEach((row) => {
+              const bookmakerEl = row.querySelector('[data-testid="odd-row-bookmaker"] p');
+              const bookmakerName = bookmakerEl ? bookmakerEl.textContent?.trim() : null;
+
+              // Get all odd values in this row
+              const oddElements = row.querySelectorAll('[data-testid^="odd-value-"]');
+              const oddValues: any[] = [];
+
+              oddElements.forEach((oddEl) => {
+                const value = oddEl.textContent?.trim();
+                if (value) {
+                  oddValues.push(value);
+                }
+              });
+
+              if (bookmakerName && oddValues.length > 0) {
+                result.odds.push({
+                  bookmaker: bookmakerName,
+                  values: oddValues,
+                });
+              }
+            });
+
+            return result;
+          }, market.name, market.type);
+
+          // Store match info from first market
+          if (!matchData.matchInfo && marketData.matchInfo) {
+            matchData.matchInfo = marketData.matchInfo;
+          }
+
+          // Store market odds
+          matchData.markets[market.type] = {
+            name: market.name,
+            odds: marketData.odds,
+          };
+
+          this.logger.log(`Scraped ${marketData.odds.length} bookmakers for ${market.name}`);
+        } catch (error) {
+          this.logger.error(`Error scraping ${market.name}:`, error.message);
+          matchData.markets[market.type] = {
+            name: market.name,
+            error: error.message,
+            odds: [],
+          };
+        }
+      }
+
+      await browser.close();
+
+      return {
+        success: true,
+        data: matchData,
+      };
+
+    } catch (error) {
+      this.logger.error('Error scraping match odds:', error);
+      await browser.close();
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
 }
