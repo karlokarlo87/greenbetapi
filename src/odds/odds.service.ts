@@ -35,9 +35,9 @@ export class OddsService {
     }
   }
 
-  @Cron('2,7,12,17,22,27,32,37,42,47,52,57 * * * *') // Every 5 minutes starting at minute 2 (2 min after sports, 1 min after leagues)
+  @Cron('*/10 * * * *') // Every 10 minutes
   async handleCronRefresh() {
-    this.logger.log('[STEP 3] Running odds data refresh from oddsportal.com (after leagues scraped)...');
+    this.logger.log('[STEP 3] Running odds data refresh from oddsportal.com (scraping all leagues)...');
     await this.deleteOldMatches();
     await this.refreshOddsFromWeb();
   }
@@ -161,29 +161,13 @@ export class OddsService {
       });
 
       this.logger.log(`Found ${leagueUrls.length} total leagues to scrape odds from`);
-
-      // Limit to scrape only 10 leagues per run to prevent timeouts
-      // Prioritize leagues with fewest odds in database
-      const leagueOddsCounts = await Promise.all(
-        leagueUrls.map(async (league) => {
-          const count = await this.oddRepository.count({ where: { leagueUrl: league.url } });
-          return { league, count };
-        })
-      );
-
-      // Sort by count (ascending) to prioritize leagues with fewer odds
-      leagueOddsCounts.sort((a, b) => a.count - b.count);
-      const leaguesToScrape = leagueOddsCounts.slice(0, 10).map(item => item.league);
-
-      this.logger.log(
-        `Scraping ${leaguesToScrape.length} leagues this run: ${leaguesToScrape.map(l => `${l.sport}/${l.league}`).join(', ')}`
-      );
+      this.logger.log('Starting to scrape ALL leagues...');
 
       let totalSaved = 0;
       let errors = 0;
 
-      // Scrape each league
-      for (const league of leaguesToScrape) {
+      // Scrape ALL leagues
+      for (const league of leagueUrls) {
         try {
           this.logger.log(`Scraping odds for: ${league.sport} - ${league.country} - ${league.league}`);
           const oddsData = await this.scrapeLeagueOdds(league.url);
