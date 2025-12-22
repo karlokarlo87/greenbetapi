@@ -44,19 +44,31 @@ export class OddsService {
 
   private async deleteOldMatches() {
     try {
-      // Delete matches that have already passed using startTime field
+      // Delete matches that started more than 3 hours ago (to allow for late match updates)
       const now = new Date();
+      const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
-      const result = await this.oddRepository
-        .createQueryBuilder()
-        .delete()
-        .from(Odd)
-        .where('startTime < :now', { now })
-        .andWhere('startTime IS NOT NULL')
-        .execute();
+      // First, log what will be deleted for debugging
+      const matchesToDelete = await this.oddRepository
+        .createQueryBuilder('odd')
+        .where('odd.startTime < :threeHoursAgo', { threeHoursAgo })
+        .andWhere('odd.startTime IS NOT NULL')
+        .getCount();
 
-      if (result.affected && result.affected > 0) {
-        this.logger.log(`Deleted ${result.affected} old matches from odds database`);
+      if (matchesToDelete > 0) {
+        this.logger.log(`Found ${matchesToDelete} matches to delete (started more than 3 hours ago)`);
+
+        const result = await this.oddRepository
+          .createQueryBuilder()
+          .delete()
+          .from(Odd)
+          .where('startTime < :threeHoursAgo', { threeHoursAgo })
+          .andWhere('startTime IS NOT NULL')
+          .execute();
+
+        if (result.affected && result.affected > 0) {
+          this.logger.log(`Deleted ${result.affected} old matches from odds database`);
+        }
       }
     } catch (error) {
       this.logger.error('Error deleting old matches:', error);
