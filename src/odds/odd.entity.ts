@@ -15,7 +15,7 @@ export class Odd {
   @Column({ nullable: true })
   league: string;
 
-  @Column()
+  @Column({ type: 'text' })
   leagueUrl: string;
 
   @Column({ nullable: true })
@@ -28,16 +28,16 @@ export class Odd {
   @Index()
   startTime: Date;
 
-  @Column()
+  @Column({ type: 'varchar', length: 500 })
   homeTeam: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   homeTeamLogo: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 500 })
   awayTeam: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   awayTeamLogo: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
@@ -52,7 +52,7 @@ export class Odd {
   @Column({ nullable: true })
   bookmakers: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   matchUrl: string;
 
   @CreateDateColumn()

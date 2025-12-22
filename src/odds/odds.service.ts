@@ -223,7 +223,7 @@ export class OddsService {
                 totalSaved++;
               } catch (error) {
                 errors++;
-                this.logger.error(`Error saving odd for ${match.homeTeam} vs ${match.awayTeam}:`, error.message);
+                this.logger.error(`Error saving odd for ${match.homeTeam} vs ${match.awayTeam}:`, error);
               }
             }
           }
