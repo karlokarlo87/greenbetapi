@@ -562,11 +562,11 @@ export class OddsService {
 
     // Define betting markets to scrape
     const markets = [
-      { name: '1X2', hash: '#1X2;2', type: 'home-draw-away' },
-      // { name: 'Home/Away', hash: '#home-away;1', type: 'home-away' },
-       { name: 'Over/Under', hash: '#over-under;2', type: 'over-under' },
+      { name: '1X2', hash: '#double;2', type: 'home-draw-away' },
+      { name: '1x,2x,x', hash: '#double;2', type: 'double-chance' },
+      // { name: 'Over/Under', hash: '#over-under;2', type: 'over-under' },
       // { name: 'Asian Handicap', hash: '#ah;1', type: 'asian-handicap' },
-      // { name: 'Draw No Bet', hash: '#dnb;2', type: 'draw-no-bet' },
+       { name: 'Draw No Bet', hash: '#dnb;2', type: 'draw-no-bet' },
     ];
 
     const fs = require('fs');
@@ -600,7 +600,14 @@ export class OddsService {
         markets: {},
       };
 
-      const page = await browser.newPage();
+
+
+      // Scrape each market
+      for (const market of markets) {
+        try {
+
+if(market.type==="home-draw-away") {
+        const page = await browser.newPage();
       await page.setViewport({ width: 1920, height: 1080 });
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36');
 
@@ -611,21 +618,16 @@ export class OddsService {
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1'
       });
-
-      // Scrape each market
-      for (const market of markets) {
-        try {
-          const fullUrl = baseMatchUrl + market.hash;
-        
+                  const fullUrl = baseMatchUrl + market.hash;
+        console.log("fullUrl");
+        console.log(fullUrl);
 
           await page.goto(fullUrl, {
             waitUntil: 'domcontentloaded',
             timeout: 30000
           });
-
-        
 await page.waitForSelector('[data-testid="over-under-expanded-row"]', { timeout: 900000 });
-          await delay(5000); // Wait for odds to load
+          await delay(2000); // Wait for odds to load
 
 const marketData = await page.evaluate(() => {
   const rows = document.querySelectorAll(
@@ -657,14 +659,76 @@ console.log(values);
 });
 console.log("marketData");
 console.log(marketData);
-          // Store match info from first market
-         
-
-          // Store market odds
           matchData.markets[market.type] = {
             name: market.name,
             odds: marketData[0].odds ,
           };
+           
+}
+else if(market.type==="draw-no-bet") {
+        const page = await browser.newPage();
+      await page.setViewport({ width: 1920, height: 1080 });
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36');
+
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+      });
+          const fullUrl = baseMatchUrl + market.hash;
+        console.log("fullUrl");
+        console.log(fullUrl);
+
+          await page.goto(fullUrl, {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+          });
+        
+await page.waitForSelector('[data-testid="bookmaker-table-header-line"]', { timeout: 60000 });
+          await delay(3000); // Wait for odds to load
+
+const marketData = await page.evaluate(() => {
+  const rows = document.querySelectorAll(
+    '[data-testid="over-under-expanded-row"]'
+  );
+
+  const odds: any[] = [];
+
+  rows.forEach(row => {
+
+ 
+    // Odds values
+    const values1 = Array.from(
+      row.querySelectorAll('.odds-link')
+    )
+      .map(el => el.textContent?.trim())
+      .filter(v => v && !isNaN(Number(v)));
+    
+
+    odds.push({
+     
+      odds: values1
+    });
+  });
+
+  return odds;
+});
+console.log("marketDataoverunder");
+console.log(marketData);
+          matchData.markets[market.type] = {
+            name: market.name,
+            odds: marketData ,
+          };
+           await browser.close();
+}
+
+          // Store match info from first market
+         
+
+          // Store market odds
+
 
          
         } catch (error) {
@@ -677,7 +741,7 @@ console.log(marketData);
         }
       }
 
-      await browser.close();
+     
 
       return {
         success: true,
